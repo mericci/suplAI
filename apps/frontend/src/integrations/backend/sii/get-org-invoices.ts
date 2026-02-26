@@ -5,10 +5,13 @@ import type { Invoice } from './types';
 export interface GetOrgInvoicesParams {
   page?: number;
   limit?: number;
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'paid';
   supplierId?: string;
   issuedAfter?: string;
   issuedBefore?: string;
+  grossAmountGte?: number;
+  grossAmountLte?: number;
+  grossAmountEq?: number;
 }
 
 export async function getOrgInvoices(

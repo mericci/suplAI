@@ -15,7 +15,7 @@ export const DocumentTypeEnum = z.enum([
 ]);
 export type DocumentType = z.infer<typeof DocumentTypeEnum>;
 
-export const InvoiceStatusEnum = z.enum(['pending', 'approved', 'rejected']);
+export const InvoiceStatusEnum = z.enum(['pending', 'approved', 'rejected', 'paid']);
 export type InvoiceStatus = z.infer<typeof InvoiceStatusEnum>;
 
 export const UpsertInvoiceSchema = z.object({
@@ -66,6 +66,9 @@ export const InvoiceListFiltersSchema = z.object({
   supplierId: z.string().uuid().optional(),
   issuedAfter: z.coerce.date().optional(),
   issuedBefore: z.coerce.date().optional(),
+  grossAmountGte: z.coerce.number().optional(),
+  grossAmountLte: z.coerce.number().optional(),
+  grossAmountEq: z.coerce.number().optional(),
   page: z.number().int().positive().default(1),
   limit: z.number().int().positive().max(100)
     .default(10),

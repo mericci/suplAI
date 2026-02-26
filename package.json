@@ -9,6 +9,7 @@
     "lint": "turbo run lint",
     "type-check": "turbo run type-check"
   },
+  "packageManager": "npm@10.8.2",
   "devDependencies": {
     "turbo": "^2.5.0"
   }

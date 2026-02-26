@@ -4,10 +4,11 @@ import {
   getReceivedDteByPeriod,
   getSiiSessionTokens,
 } from '../../../commons/integrations/sii';
-import { createPeriods } from '../helpers';
+import { createPeriods, mapSiiEventToStatus } from '../helpers';
 import getDteDetails from '../../../commons/integrations/sii/get-dte-details';
 import { operations } from '../../../commons/integrations/sii/constants';
 import { formatRut } from '../../invoices/helpers/format-rut.js';
+import { logger } from '../../../utils/logger.js';
 
 interface GetSiiInvoicesByPeriodParams {
   taxPayerDni: string;
@@ -63,6 +64,14 @@ async function getSiiInvoices({
     });
 
     for (const dteDetail of dteDetails.detalles) {
+      // Temporary debug log — helps confirm exact dehDescripcion values from the live SII API.
+      // Remove once the string match in mapSiiEventToStatus is validated against real data.
+      logger.debug('SII DTE event fields', {
+        folio: dteDetail.folio,
+        dehOrdenEvento: dteDetail.dehOrdenEvento,
+        dehDescripcion: dteDetail.dehDescripcion,
+      });
+
       invoices.push({
         id: randomUUID(),
         provider: dteDetail.rznSocRecep,
@@ -73,7 +82,7 @@ async function getSiiInvoices({
         period: resumenDte.periodo,
         documentType: resumenDte.tipoDocDesc,
         documentTypeCode: resumenDte.tipoDoc,
-        status: 'pending',
+        status: mapSiiEventToStatus(dteDetail.dehDescripcion),
         issuerTaxIdentifier:
           dteDetail.rutEmisor != null && dteDetail.dvEmisor != null
             ? formatRut(dteDetail.rutEmisor, dteDetail.dvEmisor)

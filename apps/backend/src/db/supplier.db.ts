@@ -168,7 +168,7 @@ export async function findByOrganization(
       .select('supplier_id, gross_amount, status')
       .eq('organization_id', organizationId)
       .in('supplier_id', pageSupplierIds)
-      .in('status', ['pending', 'approved'])
+      .in('status', ['pending', 'approved', 'paid'])
       .is('deleted_at', null);
 
     if (amountError) throw new Error(`Database error: ${amountError.message}`);
@@ -181,7 +181,7 @@ export async function findByOrganization(
       (acc, row) => {
         if (!acc[row.supplier_id]) acc[row.supplier_id] = { total: 0, approved: 0 };
         acc[row.supplier_id].total += row.gross_amount ?? 0;
-        if (row.status === 'approved') {
+        if (row.status === 'approved' || row.status === 'paid') {
           acc[row.supplier_id].approved += row.gross_amount ?? 0;
         }
         return acc;

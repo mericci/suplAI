@@ -15,6 +15,7 @@
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import { decrypt } from '../../../commons/encryption/index.js';
+import { supabase } from '../../../lib/supabase.js';
 import * as orgDb from '../../../db/organization.db.js';
 import * as invoiceDb from '../../../db/invoice.db.js';
 import { parseChileanRut } from '../../sii/helpers/parse-rut.js';
@@ -103,6 +104,12 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
         grossAmount: invoice.grossAmount,
       });
     }
+
+    // Record the time of this successful sync
+    await supabase
+      .from('organizations')
+      .update({ last_sii_sync_at: new Date().toISOString() } as never)
+      .eq('id', orgId);
 
     logger.info('SII sync complete', { orgId, synced: invoices.length });
   } catch (error) {

@@ -11,6 +11,7 @@ import {
   updateInvoiceHandler,
   approveInvoiceHandler,
   rejectInvoiceHandler,
+  payInvoiceHandler,
   deleteInvoiceHandler,
   syncInvoicesHandler,
   importInvoicesHandler,
@@ -64,6 +65,12 @@ export function registerInvoiceRoutes(router: Router): void {
   router.patch(
     '/api/organizations/:orgId/invoices/:id/reject',
     requireAuth(async (req, context) => rejectInvoiceHandler(req, context)),
+  );
+
+  // Mark an invoice as paid (approved → paid)
+  router.patch(
+    '/api/organizations/:orgId/invoices/:id/pay',
+    requireAuth(async (req) => payInvoiceHandler(req)),
   );
 
   // Soft-delete an invoice

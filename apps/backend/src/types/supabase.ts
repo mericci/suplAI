@@ -17,7 +17,7 @@ export type Json =
   | Json[];
 
 export type DocumentType = 'invoice' | 'credit_note' | 'debit_note' | 'receipt';
-export type InvoiceStatus = 'pending' | 'approved' | 'rejected';
+export type InvoiceStatus = 'pending' | 'approved' | 'rejected' | 'paid';
 
 export interface Database {
   public: {
@@ -33,6 +33,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
+          last_sii_sync_at: string | null;
         };
         Insert: {
           id?: string;
@@ -43,6 +44,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          last_sii_sync_at?: string | null;
         };
         Update: {
           id?: string;
@@ -53,6 +55,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+          last_sii_sync_at?: string | null;
         };
       };
       users: {

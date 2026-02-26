@@ -27,6 +27,9 @@ export async function listInvoices(
         supplierId: filters.supplierId,
         issuedAfter: filters.issuedAfter,
         issuedBefore: filters.issuedBefore,
+        grossAmountGte: filters.grossAmountGte,
+        grossAmountLte: filters.grossAmountLte,
+        grossAmountEq: filters.grossAmountEq,
       },
     );
 

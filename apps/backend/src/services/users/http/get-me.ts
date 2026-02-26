@@ -13,7 +13,7 @@ import { getErrorMessage } from '../../../utils/error.js';
 import type { RequestContext } from '../../../types/api.js';
 
 export async function getMeHandler(
-  req: Request,
+  _req: Request,
   context: RequestContext,
 ): Promise<Response> {
   try {

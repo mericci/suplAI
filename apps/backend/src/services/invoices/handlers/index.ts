@@ -4,6 +4,7 @@ export { listInvoices } from './list-invoices.js';
 export { updateInvoice } from './update-invoice.js';
 export { approveInvoice } from './approve-invoice.js';
 export { rejectInvoice } from './reject-invoice.js';
+export { payInvoice } from './pay-invoice.js';
 export { deleteInvoice } from './delete-invoice.js';
 export { syncInvoices } from './sync-invoices.js';
 export { importInvoices } from './import-invoices.js';

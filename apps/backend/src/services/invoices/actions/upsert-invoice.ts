@@ -39,6 +39,8 @@ export async function upsertInvoice(data: unknown): Promise<InvoicePublic> {
     );
 
     if (existing) {
+      // Never downgrade status — preserve approved/rejected/paid when syncing from SII
+      const statusToSet = existing.status === 'pending' ? validated.status : existing.status;
       const updated = await invoiceDb.update(
         existing.id,
         validated.organizationId,
@@ -46,7 +48,7 @@ export async function upsertInvoice(data: unknown): Promise<InvoicePublic> {
           due_date: validated.dueDate
             ? validated.dueDate.toISOString().split('T')[0]
             : null,
-          status: validated.status,
+          status: statusToSet,
           net_amount: validated.netAmount ?? null,
           tax_amount: validated.taxAmount ?? null,
           gross_amount: validated.grossAmount ?? null,

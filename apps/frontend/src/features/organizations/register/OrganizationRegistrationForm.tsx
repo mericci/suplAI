@@ -139,8 +139,8 @@ export function OrganizationRegistrationForm(): React.JSX.Element {
             access_token: sessionData.access_token,
             refresh_token: sessionData.refresh_token,
           });
-          router.push('/onboarding/configure-invoices');
           router.refresh();
+          router.push('/onboarding/configure-invoices');
         } else {
           setSubmitStatus('success');
         }

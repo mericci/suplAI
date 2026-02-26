@@ -66,6 +66,7 @@ export interface HttpClient {
   get: <T>(path: string, params?: Record<string, string>) => Promise<T>;
   post: <T>(path: string, body?: unknown) => Promise<T>;
   put: <T>(path: string, body?: unknown) => Promise<T>;
+  patch: <T>(path: string, body?: unknown) => Promise<T>;
   del: <T>(path: string) => Promise<T>;
 }
 
@@ -122,6 +123,15 @@ export function createHttpClient(
     return handleResponse<T>(res);
   }
 
+  async function patch<T>(path: string, body?: unknown): Promise<T> {
+    const res = await fetch(buildUrl(baseUrl, path), {
+      method: 'PATCH',
+      headers: await buildHeaders(),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return handleResponse<T>(res);
+  }
+
   async function del<T>(path: string): Promise<T> {
     const res = await fetch(buildUrl(baseUrl, path), {
       method: 'DELETE',
@@ -131,6 +141,6 @@ export function createHttpClient(
   }
 
   return {
-    get, post, put, del,
+    get, post, put, patch, del,
   };
 }

@@ -143,6 +143,9 @@ export async function findAllByOrganization(
     supplierId?: string;
     issuedAfter?: Date;
     issuedBefore?: Date;
+    grossAmountGte?: number;
+    grossAmountLte?: number;
+    grossAmountEq?: number;
   } = {},
 ): Promise<{ invoices: Invoice[]; total: number }> {
   let countQuery = supabase
@@ -184,6 +187,18 @@ export async function findAllByOrganization(
       'issue_date',
       filters.issuedBefore.toISOString().split('T')[0],
     );
+  }
+  if (filters.grossAmountGte !== undefined) {
+    countQuery = countQuery.gte('gross_amount', filters.grossAmountGte);
+    dataQuery = dataQuery.gte('gross_amount', filters.grossAmountGte);
+  }
+  if (filters.grossAmountLte !== undefined) {
+    countQuery = countQuery.lte('gross_amount', filters.grossAmountLte);
+    dataQuery = dataQuery.lte('gross_amount', filters.grossAmountLte);
+  }
+  if (filters.grossAmountEq !== undefined) {
+    countQuery = countQuery.eq('gross_amount', filters.grossAmountEq);
+    dataQuery = dataQuery.eq('gross_amount', filters.grossAmountEq);
   }
 
   const { count, error: countError } = await countQuery;

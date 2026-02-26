@@ -3,6 +3,7 @@ export interface Organization {
   legalName: string;
   taxIdentifier: string;
   hasCredentials: boolean;
+  lastSiiSyncAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

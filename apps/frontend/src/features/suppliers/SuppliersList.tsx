@@ -23,6 +23,7 @@ import {
 import { listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
 import { getMe } from '@/integrations/backend/users';
+import { CreateSupplierSheet } from './CreateSupplierSheet';
 
 function formatCLP(amount: number): string {
   return new Intl.NumberFormat('es-CL', {
@@ -53,6 +54,7 @@ export function SuppliersList(): React.JSX.Element {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce search input — reset to page 1 on new query
@@ -116,7 +118,15 @@ export function SuppliersList(): React.JSX.Element {
     };
 
     fetchSuppliers();
-  }, [currentPage, debouncedSearch]);
+  }, [currentPage, debouncedSearch, refreshKey]);
+
+  function handleSupplierCreated(): void {
+    supplierPageCache.clear();
+    setSearch('');
+    setDebouncedSearch('');
+    setCurrentPage(1);
+    setRefreshKey((k) => k + 1);
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -138,6 +148,7 @@ export function SuppliersList(): React.JSX.Element {
             className="pl-9"
           />
         </div>
+        <CreateSupplierSheet onSuccess={handleSupplierCreated} />
       </div>
 
       {/* Content */}

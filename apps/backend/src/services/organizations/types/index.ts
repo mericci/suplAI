@@ -19,6 +19,7 @@ export interface OrganizationPublic {
   taxAuthorityUsername: string | null;
   /** True if tax authority credentials (username + password) are stored. */
   hasCredentials: boolean;
+  lastSiiSyncAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -42,6 +43,7 @@ export function toPublic(org: OrgRow): OrganizationPublic {
     hasCredentials: !!(
       org.tax_authority_username && org.tax_authority_password_enc
     ),
+    lastSiiSyncAt: org.last_sii_sync_at,
     createdAt: org.created_at,
     updatedAt: org.updated_at,
     deletedAt: org.deleted_at,
