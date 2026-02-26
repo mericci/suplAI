@@ -1,0 +1,792 @@
+# SuplAI - Supabase Backend Project Rules
+
+## Technology Stack
+- **Runtime**: Node.js v20+ (ALWAYS use Node.js, NEVER Deno)
+- **Language**: TypeScript (strict mode always)
+- **Backend**: Supabase (Database, Auth, Storage, Realtime, Edge Functions, Vector/AI)
+- **Testing**: Mocha + Chai
+- **Validation**: Zod
+- **Package Manager**: npm
+
+## Project Structure
+```
+/
+├── supabase/
+│   ├── functions/        # Supabase Edge Functions
+│   │   └── function-name/
+│   │       └── index.ts
+│   ├── migrations/       # Database migrations
+│   ├── seed.sql         # Seed data for development
+│   └── config.toml       # Supabase configuration
+├── src/
+│   ├── lib/             # Core libraries (supabase client, router, etc.)
+│   ├── main.ts          # Creates router, registers /health, calls registerXxxRoutes from each service
+│   ├── services/        # Business logic + routes + HTTP layer (modular by resource)
+│   │   └── users/       # Example service module (plural name)
+│   │       ├── actions/      # Business logic files (e.g., get-user.ts)
+│   │       ├── handlers/     # Expose actions; handlers/index.ts exports ALL handlers
+│   │       ├── http/         # HTTP request handlers (Request → Response), thin layer
+│   │       ├── helpers/      # Module-specific helpers
+│   │       ├── types/        # Types used ONLY in this service
+│   │       ├── config.ts     # Service-specific configuration
+│   │       └── routes.ts     # Exports registerXxxRoutes(router); NO service index.ts
+│   ├── db/              # Data access layer (database queries)
+│   │   └── schemas/         # Database validation schemas (Zod)
+│   │       ├── user.schema.ts   # User table schema
+│   │       └── index.ts         # Exports all schemas
+│   ├── auth/            # Authentication logic and middleware
+│   ├── storage/         # File storage handlers
+│   ├── types/           # TypeScript types used across multiple services
+│   └── utils/           # Helper functions and utilities
+├── tests/               # Test files (*.test.ts)
+├── package.json         # Node.js configuration
+├── tsconfig.json        # TypeScript configuration
+└── .env.example         # Environment variables template
+```
+
+## Architecture & Separation of Concerns
+
+### Layer Responsibilities
+
+1. **Service Layer (`src/services/`)** - MODULAR STRUCTURE (each service is self-contained):
+   - **Each service is a folder** (plural name: `users/`, `products/`, `orders/`)
+   - **No service-level `index.ts`**. Entry point is `routes.ts` (export `registerXxxRoutes(router)`).
+   - Inside each service folder:
+     - `actions/` - Business logic files (e.g., `get-user.ts`, `create-user.ts`)
+     - `handlers/` - Expose actions (same filenames); **must have `handlers/index.ts`** that exports ALL handlers so callers use a single entry point
+     - `http/` - HTTP request handlers (Request → Response): parse request, validate input, call handler from `../handlers`, return Response. **THIN LAYER**
+     - `routes.ts` - Registers routes on the router; imports from `./http`; exports `registerXxxRoutes(router)`
+     - `helpers/` - Module-specific helper functions
+     - `types/` - Types used ONLY in this service
+     - `config.ts` - Service-specific configuration
+   - **CORE BUSINESS LOGIC** lives in actions; handlers expose it; http adapts to HTTP.
+
+2. **Application entry (`main.ts`)**:
+   - Creates the router, registers `/health`, then calls `registerXxxRoutes(router)` for each service.
+   - Imports from `./services/<name>/routes` (e.g. `./services/users/routes`), **never** from a service `index.ts`.
+
+3. **Database Layer (`src/db/`)**:
+   - Direct database queries
+   - CRUD operations
+   - Type-safe queries with Supabase
+   - **DATA ACCESS ONLY**
+
+### Flow Example
+```
+Request → routes.ts → HTTP handler (http/) → Service handler (handlers/) → Action (Logic) → DB Query → Response
+                     (validate, parse)      (from handlers/index)          (business)      (data)
+```
+
+### Handlers as single entry point
+- **All calls to service handlers** (e.g. from the `http/` layer or tests) **must go through `handlers/index.ts`**.
+- Do not import from `../handlers/get-user`; import from `../handlers` so the service has one public handler API.
+
+### Modular Service Structure
+
+#### Directory Structure:
+```
+src/services/
+└── users/                    # Service module (PLURAL). NO index.ts at this level.
+    ├── actions/              # Business logic
+    │   ├── get-user.ts      # Generic get (by id, email, etc.)
+    │   ├── create-user.ts
+    │   └── ...
+    ├── handlers/             # Expose actions; single entry point
+    │   ├── index.ts         # Exports ALL handlers (getUser, createUser, ...)
+    │   ├── get-user.ts      # Exposes get-user action
+    │   ├── create-user.ts   # Exposes create-user action
+    │   └── ...
+    ├── http/                 # HTTP layer (Request → Response)
+    │   ├── index.ts         # Re-exports HTTP handlers
+    │   ├── create-user.ts   # createUserHandler(req) → Response
+    │   └── ...
+    ├── helpers/              # Module-specific helpers
+    │   └── validate-user.ts # Only used in users service
+    ├── types/                # Types used ONLY in this service
+    │   └── index.ts         # Service-specific types
+    ├── config.ts             # Service-specific configuration
+    └── routes.ts             # registerUserRoutes(router); imports from ./http
+```
+
+### Example Implementation
+
+**main.ts** – imports from each service's `routes.ts`:
+```typescript
+import { registerUserRoutes } from "./services/users/routes.js";
+import { registerSiiRoutes } from "./services/sii/routes.js";
+import { registerTestRoutes } from "./services/test/routes.js";
+
+const router = new Router();
+router.get("/health", ...);
+registerTestRoutes(router);
+registerSiiRoutes(router);
+registerUserRoutes(router);
+```
+
+**Routes** (`src/services/users/routes.ts`):
+```typescript
+import type { Router } from "../../lib/router.js";
+import { createUserHandler, ... } from "./http/index.js";
+import { requireAuth } from "../../auth/middleware.js";
+
+export function registerUserRoutes(router: Router): void {
+  router.post("/api/users", createUserHandler);
+  router.put("/api/users/:id", requireAuth((req, _ctx) => createUserHandler(req)));
+  // ...
+}
+```
+
+**HTTP handler** (`src/services/users/http/create-user.ts`) – thin layer; imports handlers from `../handlers`:
+```typescript
+import { createUser } from "../handlers/index.js";  // or "../handlers"
+import { successResponse, validationError, serverError } from "../../../utils/response.js";
+import { getErrorMessage } from "../../../utils/error.js";
+
+export async function createUserHandler(req: Request): Promise<Response> {
+  try {
+    const body = await req.json();
+    if (!body || typeof body !== "object") return validationError("Invalid request body");
+    // Validate format, then delegate to service handler
+    const user = await createUser(body);
+    return successResponse(user);
+  } catch (error) {
+    return serverError(getErrorMessage(error));
+  }
+}
+```
+
+**Handlers index** (`src/services/users/handlers/index.ts`) – single entry point for all handlers:
+```typescript
+export { getUser } from "./get-user.js";
+export { createUser } from "./create-user.js";
+export { updateUser } from "./update-user.js";
+export { deleteUser } from "./delete-user.js";
+export { listUsers } from "./list-users.js";
+```
+
+**Service Handler** (`src/services/users/handlers/create-user.ts`):
+```typescript
+import { createUser as createUserAction } from "../actions/create-user.js";
+
+export async function createUser(userData: CreateUserInput): Promise<User> {
+  return await createUserAction(userData);
+}
+```
+
+**Service Action** (`src/services/users/actions/create-user.ts`):
+```typescript
+export async function createUser(userData: CreateUserInput): Promise<User> {
+  // Business logic validations
+  validateUserData(userData); // From helpers
+  
+  // Check if user exists
+  const existing = await userDb.findByEmail(userData.email);
+  if (existing) {
+    throw new Error("User already exists");
+  }
+  
+  // Create user
+  const user = await userDb.create(userData);
+  
+  // Additional business logic (send email, etc.)
+  
+  return user;
+}
+```
+
+**Service Helper** (`src/services/users/helpers/validate-user.ts`):
+```typescript
+export function validateUserData(userData: CreateUserInput): void {
+  if (!isValidEmail(userData.email)) {
+    throw new Error("Invalid email format");
+  }
+  
+  if (userData.name && userData.name.length < 2) {
+    throw new Error("Name must be at least 2 characters");
+  }
+}
+```
+
+**Database** (`src/db/user.db.ts`):
+```typescript
+export async function create(userData: CreateUserInput): Promise<User> {
+  const { data, error } = await supabase
+    .from("users")
+    .insert(userData)
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
+}
+```
+
+**No service index**: There is no `src/services/users/index.ts`. The app registers routes via `registerUserRoutes` imported from `src/services/users/routes.ts`. Tests or other code that need the handlers import from `services/users/handlers/index.js`.
+
+## Node.js Configuration
+
+### package.json must include:
+```json
+{
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsc && tsc-alias",
+    "test": "mocha",
+    "test:watch": "mocha --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "fmt": "prettier --write \"src/**/*.ts\"",
+    "type-check": "tsc --noEmit",
+    "validate": "npm run fmt:check && npm run lint && npm run type-check && npm run test"
+  }
+}
+```
+
+### TypeScript Configuration
+- Use `"module": "ESNext"` and `"moduleResolution": "bundler"`
+- Always use `.js` extensions in imports (even for `.ts` files)
+- Enable strict mode
+- Use path aliases if needed
+
+## Supabase Client Configuration
+
+### ALWAYS use process.env for credentials:
+```typescript
+import { createClient } from "@supabase/supabase-js";
+import "dotenv/config";
+
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
+```
+
+### Validate environment variables:
+```typescript
+const requiredEnvVars = ["SUPABASE_URL", "SUPABASE_ANON_KEY"];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`Missing required environment variable: ${envVar}`);
+  }
+}
+```
+
+## Security Best Practices
+
+### Password Hashing
+- NEVER store plain text passwords
+- Use Supabase Auth for user authentication (handles hashing automatically)
+- For custom password fields, use bcrypt:
+```typescript
+import bcrypt from "bcrypt";
+
+// Hash password
+const hashedPassword = await bcrypt.hash(password, 10);
+
+// Verify password
+const isValid = await bcrypt.compare(password, hashedPassword);
+```
+
+### Environment Variables
+- NEVER commit `.env` files
+- ALWAYS use `process.env` to access environment variables
+- Load environment variables with `dotenv` at app startup
+- ALWAYS validate environment variables exist
+
+### API Security
+- Always validate and sanitize user input
+- Use Row Level Security (RLS) policies in Supabase
+- Implement rate limiting
+- Use CORS properly
+- Always use HTTPS in production
+
+## Database Best Practices
+
+### Supabase Database
+- Use TypeScript types generated from database schema
+- Always use parameterized queries (Supabase handles this)
+- Implement proper error handling
+- Use transactions for related operations
+- **ALWAYS validate data with schemas before DB operations**
+
+### Database Schemas (Zod Validation)
+
+**Location**: `src/db/schemas/`
+
+Every table MUST have a corresponding schema file that defines:
+- Structure (fields and types)
+- Validation rules (min/max, regex, enums)
+- TypeScript types (inferred from schemas)
+
+**Why Schemas?**
+- ✅ Validate data BEFORE it reaches the database
+- ✅ Prevent invalid data from being stored
+- ✅ Type-safe operations
+- ✅ Self-documenting code
+- ✅ Runtime validation + TypeScript compilation
+
+**Structure**:
+```
+src/db/schemas/
+├── user.schema.ts      # User table validation
+├── product.schema.ts   # Product table validation
+└── index.ts            # Exports all schemas
+```
+
+**Schema File Template** (`[table].schema.ts`):
+```typescript
+import { z } from "zod";
+
+// Define enums
+export const UserStatusEnum = z.enum(["active", "inactive"]);
+
+// Define schemas for different operations
+export const CreateUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2).max(100),
+  status: UserStatusEnum.default("active"),
+});
+
+export const UpdateUserSchema = CreateUserSchema.partial();
+
+// Export types
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+
+// Export validation functions
+export function validateCreateUser(data: unknown): CreateUserInput {
+  return CreateUserSchema.parse(data);
+}
+```
+
+**Usage in Actions**:
+```typescript
+import { validateCreateUser } from "../../../db/schemas/index.js";
+
+export async function createUser(userData: unknown) {
+  // Validate (throws ZodError if invalid)
+  const validatedData = validateCreateUser(userData);
+  
+  // Now safe to use in DB
+  const user = await userDb.create(validatedData);
+  return user;
+}
+```
+
+**Schema Rules**:
+1. One schema file per database table
+2. Define separate schemas for Create, Update, Query operations
+3. Use Zod enums for status, role, type fields
+4. Export validation functions for easy use
+5. Export TypeScript types inferred from schemas
+6. Include proper error messages in validations
+7. Use `.safeParse()` when you need error handling without throwing
+
+### Type Safety with Database:
+```typescript
+import { Database } from "./types/supabase.js";
+
+const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+
+// Type-safe queries
+const { data, error } = await supabase
+  .from("users")
+  .select("*")
+  .eq("id", userId);
+```
+
+### Generate types from schema:
+```bash
+supabase gen types typescript --local > src/types/supabase.ts
+```
+
+## API REST Design
+
+### RESTful Conventions
+- Use HTTP methods correctly: GET, POST, PUT, PATCH, DELETE
+- Use proper status codes (200, 201, 400, 401, 403, 404, 500)
+- Return consistent JSON response format:
+```typescript
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+```
+
+### Error Handling
+- Always catch and handle errors properly
+- Use the `getErrorMessage()` utility for safe error extraction
+- Never expose internal error details to clients
+- Log errors for debugging
+- Return user-friendly error messages
+
+## Testing
+
+### Use Mocha + Chai
+```typescript
+import { describe, it } from "mocha";
+import { expect } from "chai";
+
+describe("User Service", () => {
+  it("should create user", async () => {
+    const user = await createUser({ email: "test@example.com" });
+    expect(user).to.exist;
+    expect(user.email).to.equal("test@example.com");
+  });
+});
+```
+
+### Test Coverage
+- Test all API endpoints
+- Test authentication flows
+- Test database operations
+- Test error handling
+- Use mocks for external dependencies
+
+### Run tests:
+```bash
+npm test
+npm run test:watch
+npm run test:coverage
+```
+
+## Authentication & Authorization
+
+### Supabase Auth
+- Use Supabase Auth for user management
+- Implement JWT validation
+- Use Row Level Security (RLS) policies
+- Handle session management properly
+
+### Get authenticated user:
+```typescript
+const authHeader = req.headers.get("Authorization");
+const token = authHeader?.replace("Bearer ", "");
+const { data: { user }, error } = await supabase.auth.getUser(token);
+```
+
+## Storage Best Practices
+
+### File Upload
+- Validate file types and sizes
+- Use proper bucket policies
+- Generate unique file names
+- Implement proper error handling
+
+```typescript
+const { data, error } = await supabase.storage
+  .from("bucket-name")
+  .upload(`${userId}/${fileName}`, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+```
+
+## Code Style & Quality
+
+### TypeScript
+- ALWAYS use strict mode
+- Define explicit types, avoid `any`
+- Use interfaces for object shapes
+- Use enums for constants
+- Use generics for reusable code
+
+### Code Organization
+- Keep functions small and focused
+- Use meaningful variable and function names
+- Comment complex logic
+- Use async/await over promises
+- Avoid deep nesting
+
+### Imports
+- ALWAYS use `.js` extensions in imports (even for `.ts` files)
+- Use npm packages, not CDN URLs
+- Group imports: external, internal, types
+- Example:
+```typescript
+import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
+import { logger } from "../utils/logger.js";
+import type { Database } from "../types/supabase.js";
+```
+
+## Performance
+
+### Optimization
+- Use database indexes properly
+- Implement caching where appropriate
+- Use connection pooling (Supabase handles this)
+- Minimize N+1 queries
+- Use select() to limit returned columns
+
+### Realtime
+- Use Supabase Realtime for live data
+- Subscribe only to needed changes
+- Clean up subscriptions properly
+
+## Logging & Monitoring
+
+### Logging
+- Use structured logging
+- Include context (user_id, request_id)
+- Log errors with stack traces
+- Don't log sensitive data (passwords, tokens)
+
+### Example:
+```typescript
+console.log(JSON.stringify({
+  level: "info",
+  message: "User created",
+  userId: user.id,
+  timestamp: new Date().toISOString(),
+}));
+```
+
+## Deployment
+
+### Environment Variables Required
+```
+SUPABASE_URL=your-project-url
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+API_PORT=8000
+API_HOST=localhost
+```
+
+### Build for Production
+```bash
+npm run build
+npm start
+```
+
+## Version Control
+
+### .gitignore must include:
+```
+.env
+.env.local
+*.log
+node_modules/
+dist/
+coverage/
+.DS_Store
+```
+
+## Service Module Structure Rules
+
+### Creating a New Service Module
+
+When creating a new service (e.g., products, orders):
+
+1. **Use plural names** for service folders: `users/`, `products/`, `orders/`
+2. **Do NOT create a service-level `index.ts`**. The service entry point is `routes.ts`.
+3. **Create standard subfolders and files**:
+   ```
+   services/
+   └── [service-name]/
+       ├── actions/         # Business logic implementations
+       ├── handlers/        # Expose actions; MUST include handlers/index.ts exporting all handlers
+       ├── http/            # HTTP handlers (Request → Response); import from ../handlers
+       ├── helpers/         # Module-specific utilities
+       ├── types/           # Types used ONLY in this service
+       ├── config.ts        # Service-specific configuration
+       └── routes.ts        # registerXxxRoutes(router); imports from ./http
+   ```
+
+4. **Actions** (`actions/` folder):
+   - One file per operation: `get-user.ts`, `create-user.ts`, etc.
+   - Contains ALL business logic for that operation
+   - Can call helpers from the same module
+   - Can call database queries from `src/db/`
+   - **GET operations should be generic**: Accept multiple params (id, email, etc.)
+
+5. **Handlers** (`handlers/` folder):
+   - Same filename as corresponding action; each file exposes one action
+   - **Must have `handlers/index.ts`** that re-exports all handlers (so callers use `from "../handlers"` only)
+   - Minimal code, just a wrapper:
+   ```typescript
+   import { createUser as createUserAction } from "../actions/create-user.js";
+   
+   export async function createUser(data: CreateUserInput) {
+     return await createUserAction(data);
+   }
+   ```
+
+6. **HTTP layer** (`http/` folder):
+   - One file per endpoint (e.g. `create-user.ts` → `createUserHandler(req)`)
+   - Parse request, validate input, call handler from `../handlers`, return `Response`
+   - `http/index.ts` re-exports all HTTP handlers for use in `routes.ts`
+
+7. **Routes** (`routes.ts` at service root):
+   - Export a single function: `registerXxxRoutes(router: Router): void`
+   - Import HTTP handlers from `./http` and register routes on the router
+   - This is what `main.ts` imports (e.g. `from "./services/users/routes"`)
+
+8. **Helpers** (`helpers/` folder):
+   - Functions used ONLY within this service module
+   - Validation, transformation, calculation functions
+   - Example: `validate-user.ts`, `calculate-discount.ts`
+
+9. **Types** (`types/` folder):
+   - **CRITICAL RULE**: Types used ONLY in this service
+   - If a type is used in multiple services → move to `src/types/`
+   - If a type is used in only one service → keep in `services/[name]/types/`
+   - Examples: Service-specific interfaces, enums, type guards
+   ```typescript
+   // services/users/types/index.ts
+   export interface UserSearchParams { ... }
+   export interface UserProfile { ... }
+   ```
+
+10. **Config** (`config.ts`):
+   - Service-specific configuration and constants
+   - URLs, limits, validation rules, enums
+   - Environment-specific values
+   - Example:
+   ```typescript
+   export const USER_CONFIG = {
+     MIN_NAME_LENGTH: 2,
+     MAX_PAGE_SIZE: 100,
+     SESSION_TIMEOUT_MINUTES: 60,
+   } as const;
+   ```
+
+11. **No service index**: Do not add `index.ts` at the service root. Handlers are consumed via `handlers/index.ts`; route registration is via `routes.ts`. External code (e.g. tests) that need handlers import from `services/<name>/handlers/index.js`.
+
+### Generic GET Operations
+
+GET operations should detect which parameter is provided:
+
+```typescript
+// services/users/types/index.ts
+export interface UserSearchParams {
+  id?: string;
+  email?: string;
+  phone?: string;
+}
+
+// services/users/actions/get-user.ts
+import type { UserSearchParams } from "../types/index.js";
+
+export async function getUser(params: UserSearchParams) {
+  if (params.id) {
+    return await userDb.findById(params.id);
+  }
+  if (params.email) {
+    return await userDb.findByEmail(params.email);
+  }
+  throw new Error("No valid search criteria provided");
+}
+```
+
+### File Naming Conventions
+
+- **Actions**: `get-[resource].ts`, `create-[resource].ts`, `update-[resource].ts`
+- **Handlers**: Same as actions
+- **Helpers**: `validate-[resource].ts`, `format-[something].ts`
+- **Config**: Always `config.ts`
+- **Types**: Always `types/index.ts`
+- Use kebab-case for all filenames
+
+### Import Patterns
+
+```typescript
+// main.ts: register routes from each service (no service index)
+import { registerUserRoutes } from "./services/users/routes.js";
+import { registerSiiRoutes } from "./services/sii/routes.js";
+
+// Within service: HTTP layer imports handlers from single entry point
+import { createUser } from "../handlers/index.js";   // or "../handlers"
+
+// Within same service (actions from helpers)
+import { validateUserData } from "../helpers/validate-user.js";
+
+// Within same service (types)
+import type { UserSearchParams } from "../types/index.js";
+
+// Within same service (config)
+import { USER_CONFIG } from "../config.js";
+
+// Handlers from actions
+import { createUser as createUserAction } from "../actions/create-user.js";
+
+// Tests or other code that need service handlers
+import * as userService from "../src/services/users/handlers/index.js";
+
+// Global types (used across services)
+import type { ApiResponse } from "../../../types/api.js";
+```
+
+### Types Organization Rules
+
+**CRITICAL: Where to put types**
+
+1. **Service-specific types** → `services/[name]/types/`
+   - Types used ONLY in this service
+   - Example: `UserSearchParams`, `UserProfile`, `UserValidationResult`
+   
+2. **Shared types** → `src/types/`
+   - Types used in multiple services
+   - Example: `ApiResponse`, `PaginatedResponse`, `HttpStatus`
+   - Database types from Supabase
+
+3. **Decision rule**:
+   ```
+   Is this type used in more than one service?
+   YES → src/types/
+   NO  → services/[name]/types/
+   ```
+
+**Examples:**
+
+```typescript
+// ✅ CORRECT: Service-specific type
+// services/users/types/index.ts
+export interface UserSearchParams { ... }
+
+// ✅ CORRECT: Shared type
+// src/types/api.ts
+export interface ApiResponse<T> { ... }
+
+// ❌ WRONG: Service-specific type in global types
+// src/types/user.ts  ← Don't do this if only used in users service
+
+// ❌ WRONG: Shared type in service folder
+// services/users/types/api-response.ts  ← Don't do this if used in multiple services
+```
+
+## General Rules
+
+1. ALWAYS use Node.js v20+ and npm
+2. NEVER use Deno
+3. ALWAYS use TypeScript strict mode
+4. ALWAYS use `.js` extensions in imports
+5. ALWAYS use `process.env` for environment variables (with dotenv)
+6. **ALWAYS validate data with schemas** before database operations
+7. ALWAYS handle errors properly with `getErrorMessage()` utility
+8. NEVER commit sensitive data
+9. ALWAYS use Supabase client for database operations
+10. ALWAYS hash passwords (or use Supabase Auth)
+11. ALWAYS write tests for critical functionality
+12. Keep code modular and maintainable
+13. Follow RESTful API conventions
+14. Use meaningful commit messages
+15. Keep dependencies minimal and updated
+16. Prioritize security in all implementations
+17. **ALWAYS use modular service structure** (actions/handlers/http/helpers/types/config.ts/routes.ts); **NO service-level index.ts**; handlers exposed via handlers/index.ts; app imports from services/<name>/routes
+18. **Service folders are PLURAL** (users, products, orders)
+19. **GET operations are GENERIC** (accept multiple search parameters)
+20. **Types used in ONE service** → `services/[name]/types/`
+21. **Types used in MULTIPLE services** → `src/types/`
+22. **Each service has config.ts** for service-specific constants and configuration
+23. **Each database table has a schema** in `src/db/schemas/` with Zod validation
+24. **Validate in actions** before calling database layer
+25. **Use Mocha + Chai** for all testing
+26. **Use ESLint and Prettier** for code quality
+27. **Run `npm run validate`** before committing
+28. **HTTP layer lives inside each service** in `http/`; there is no global `src/api/` folder
+29. **All calls to service handlers** (from `http/` or tests) **go through `handlers/index.ts`**; do not import from `../handlers/some-file`, use `../handlers`
