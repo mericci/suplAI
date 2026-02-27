@@ -63,6 +63,14 @@ async function getSiiInvoices({
       taxPayerDv,
     });
 
+    if (!dteDetails?.detalles) {
+      logger.warn('No DTE details returned from SII', {
+        period: resumenDte.periodo,
+        documentType: resumenDte.tipoDoc,
+      });
+      continue;
+    }
+
     for (const dteDetail of dteDetails.detalles) {
       // Temporary debug log — helps confirm exact dehDescripcion values from the live SII API.
       // Remove once the string match in mapSiiEventToStatus is validated against real data.
