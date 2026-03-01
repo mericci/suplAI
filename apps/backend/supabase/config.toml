@@ -1,7 +1,7 @@
 # Supabase Configuration
 # Generated with `supabase init`
 
-project_id = "your-project-id"
+project_id = "your-project-ref"
 
 [api]
 enabled = true
@@ -54,3 +54,7 @@ double_confirm_changes = true
 enable_confirmations = false
 
 # Add your custom configuration below
+
+[functions.api]
+enabled = true
+verify_jwt = false
