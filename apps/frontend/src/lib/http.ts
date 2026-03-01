@@ -30,7 +30,9 @@ function buildUrl(
   path: string,
   params?: Record<string, string>,
 ): string {
-  const url = new URL(path, baseUrl);
+  const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const url = new URL(`${base}${normalizedPath}`);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.set(key, value);
