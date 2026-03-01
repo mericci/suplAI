@@ -91,6 +91,8 @@ npm run test          # run all tests
 - Commits: conventional (`feat:`, `fix:`, `chore:`, `docs:`)
 - PR required for main, 1 review minimum
 - Vercel and supabase preview deploys on every PR (for frontend and backend)
+- **Before creating a new branch from main**: always run `git pull origin main` first to ensure you branch from an up-to-date base
+- **Before opening a PR to main**: `git checkout main && git pull origin main`, switch back to your branch, run `git merge origin/main`, review and resolve any conflicts before pushing
 
 
 ## Backend (`apps/backend`)
@@ -151,15 +153,6 @@ src/commons/
 │       └── register-dte-event.ts         — SOAP: register ACD/RCD event
 └── time/               — Delay utility
 ```
-
-### SII DTE Event Registration
-
-When an invoice is approved or rejected, the backend **best-effort** notifies the Chilean tax authority (SII) via SOAP:
-
-- **Approve** → sends `ACD` (Aceptación de Contenido del DTE)
-- **Reject** → sends `RCD` (Reclamo al Contenido del DTE)
-
-The notification is fire-and-forget: local status change always persists even if the SII call fails. The call silently skips if the organization has no SII credentials stored. Implementation: `src/services/invoices/actions/notify-sii-dte-event.ts`.
 
 ### Key Conventions
 - All imports use `.js` extensions (ESM + TypeScript bundler resolution)
