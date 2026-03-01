@@ -39,7 +39,7 @@ supabase/.temp/
 # Build artifacts
 dist/
 build/
-lib/
+/lib/
 
 # Temporary files
 tmp/
