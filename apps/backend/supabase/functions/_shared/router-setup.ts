@@ -17,7 +17,7 @@ export function createRouter(): Router {
   const router = new Router();
 
   // Health check (app-level, not tied to a service)
-  router.get('/health', () => Promise.resolve(
+  router.get('/api/health', () => Promise.resolve(
     new Response(
       JSON.stringify({
         status: 'healthy',

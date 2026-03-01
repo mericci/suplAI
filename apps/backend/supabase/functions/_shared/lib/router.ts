@@ -83,11 +83,10 @@ export class Router {
     }
 
     const url = new URL(req.url);
-    // Supabase prepends the function name as the first path segment when
-    // routing to the Edge Function (e.g. /api/health → /api is the fn name).
-    // Strip it so registered routes (/health, /api/users/me, …) match correctly.
-    const withoutFnName = url.pathname.match(/^\/[^/]+(\/.*)?$/);
-    const pathname = withoutFnName ? (withoutFnName[1] ?? '/') : url.pathname;
+    // Supabase prepends the function name ("api") as the first path segment,
+    // so the function receives /api/users/me for a request routed to it.
+    // Routes are registered with that /api prefix, so no stripping needed.
+    const { pathname } = url;
 
     logger.info('Incoming request', {
       method: req.method,

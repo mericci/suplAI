@@ -10,11 +10,11 @@ const nextConfig: NextConfig = {
     return [
       {
         // Proxy /api/* to the Supabase Edge Function.
-        // The destination doubles the /api segment because the Edge Function
-        // name ("api") becomes the first path segment inside Deno, and our
-        // routes are registered with an /api prefix.
+        // Supabase prepends the function name ("api") as the first path
+        // segment inside Deno, so /api/users/me arrives as /api/users/me —
+        // no duplication needed in the destination.
         source: "/api/:path*",
-        destination: `${SUPABASE_API_URL}/api/:path*`,
+        destination: `${SUPABASE_API_URL}/:path*`,
       },
     ];
   },
