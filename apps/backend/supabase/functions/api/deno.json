@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "axios": "npm:axios@1.13.5",
+    "axios-cookiejar-support": "npm:axios-cookiejar-support@6.0.5",
+    "tough-cookie": "npm:tough-cookie@6.0.0",
+    "zod": "npm:zod@3.22.4",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.39.3",
+    "http-errors": "npm:http-errors@2.0.1",
+    "http-status-codes": "npm:http-status-codes@2.3.0"
+  }
+}

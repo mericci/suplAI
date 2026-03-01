@@ -10,6 +10,7 @@ import * as invoiceDb from '../../../db/invoice.db.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import { toPublic } from '../types/index.js';
 import type { InvoicePublic } from '../types/index.js';
+import { notifySiiDteEvent } from './notify-sii-dte-event.js';
 
 export async function approveInvoice(
   id: string,
@@ -39,6 +40,15 @@ export async function approveInvoice(
     } as never);
 
     logger.info('Invoice approved', { invoiceId: id, approvedByUserId });
+
+    // Best-effort SII notification — never blocks local approval
+    notifySiiDteEvent(organizationId, invoice, 'ACD').catch((err: unknown) => {
+      logger.warn('Failed to register ACD with SII', {
+        invoiceId: id,
+        error: (err as Error)?.message,
+      });
+    });
+
     return toPublic(invoice);
   } catch (error) {
     logger.error('Error approving invoice', { error: getErrorMessage(error) });

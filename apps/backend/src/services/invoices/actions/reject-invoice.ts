@@ -10,6 +10,7 @@ import * as invoiceDb from '../../../db/invoice.db.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import { toPublic } from '../types/index.js';
 import type { InvoicePublic } from '../types/index.js';
+import { notifySiiDteEvent } from './notify-sii-dte-event.js';
 
 export async function rejectInvoice(
   id: string,
@@ -39,6 +40,15 @@ export async function rejectInvoice(
     } as never);
 
     logger.info('Invoice rejected', { invoiceId: id, rejectedByUserId });
+
+    // Best-effort SII notification — never blocks local rejection
+    notifySiiDteEvent(organizationId, invoice, 'RCD').catch((err: unknown) => {
+      logger.warn('Failed to register RCD with SII', {
+        invoiceId: id,
+        error: (err as Error)?.message,
+      });
+    });
+
     return toPublic(invoice);
   } catch (error) {
     logger.error('Error rejecting invoice', { error: getErrorMessage(error) });
