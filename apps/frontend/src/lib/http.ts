@@ -32,13 +32,10 @@ function buildUrl(
 ): string {
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const url = new URL(`${base}${normalizedPath}`);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
-    });
-  }
-  return url.toString();
+  const fullPath = `${base}${normalizedPath}`;
+  if (!params || !Object.keys(params).length) return fullPath;
+  const qs = new URLSearchParams(params).toString();
+  return `${fullPath}?${qs}`;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
