@@ -16,7 +16,6 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type DocumentType = 'invoice' | 'credit_note' | 'debit_note' | 'receipt';
 export type InvoiceStatus = 'pending' | 'approved' | 'rejected' | 'paid';
 
 export interface Database {
@@ -142,7 +141,8 @@ export interface Database {
           external_unique_key: string;
           issuer_tax_identifier: string;
           receiver_tax_identifier: string;
-          document_type: DocumentType;
+          document_type: string;
+          document_type_number: number;
           document_number: string;
           issue_date: string;
           due_date: string | null;
@@ -165,7 +165,8 @@ export interface Database {
           external_unique_key: string;
           issuer_tax_identifier: string;
           receiver_tax_identifier: string;
-          document_type: DocumentType;
+          document_type: string;
+          document_type_number: number;
           document_number: string;
           issue_date: string;
           due_date?: string | null;
@@ -187,7 +188,8 @@ export interface Database {
           external_unique_key?: string;
           issuer_tax_identifier?: string;
           receiver_tax_identifier?: string;
-          document_type?: DocumentType;
+          document_type?: string;
+          document_type_number?: number;
           document_number?: string;
           issue_date?: string;
           due_date?: string | null;
@@ -211,7 +213,6 @@ export interface Database {
       // Add your function types here
     };
     Enums: {
-      document_type: DocumentType;
       invoice_status: InvoiceStatus;
     };
   };

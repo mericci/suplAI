@@ -11,12 +11,14 @@ import {
   deleteOrganizationHandler,
   listOrganizationsHandler,
   registerOrganizationHandler,
+  lookupSiiHandler,
 } from './http/index.js';
 import { requireAuth } from '../../auth/middleware.js';
 
 export function registerOrganizationRoutes(router: Router): void {
-  // Public registration — must be declared before /:id to avoid route conflict
+  // Public endpoints — must be declared before /:id to avoid route conflict
   router.post('/api/organizations/register', registerOrganizationHandler);
+  router.post('/api/organizations/lookup-sii', lookupSiiHandler);
 
   router.get('/api/organizations', listOrganizationsHandler);
   router.get('/api/organizations/:id', getOrganizationHandler);

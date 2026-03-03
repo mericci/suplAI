@@ -65,6 +65,7 @@ export async function upsertInvoice(data: unknown): Promise<InvoicePublic> {
       issuer_tax_identifier: validated.issuerTaxIdentifier,
       receiver_tax_identifier: validated.receiverTaxIdentifier,
       document_type: validated.documentType,
+      document_type_number: validated.documentTypeNumber,
       document_number: validated.documentNumber,
       issue_date: validated.issueDate.toISOString().split('T')[0] as string,
       due_date: validated.dueDate

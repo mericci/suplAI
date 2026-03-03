@@ -2,8 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { EyeIcon, EyeOffIcon, CheckCircleIcon } from 'lucide-react';
-import { registerOrganization } from '@/integrations/backend/organizations';
+import {
+  EyeIcon,
+  EyeOffIcon,
+  CheckCircleIcon,
+  LoaderCircleIcon,
+  BadgeCheckIcon,
+} from 'lucide-react';
+import { registerOrganization, lookupSii } from '@/integrations/backend/organizations';
 import { createClient } from '@/lib/supabase/client';
 import { HttpError } from '@/lib/http';
 import type { FormState, FormErrors, SubmitStatus } from './types';
@@ -78,6 +84,32 @@ const INITIAL_STATE: FormState = {
 
 const INITIAL_ERRORS: FormErrors = { org: {}, adminUser: {} };
 
+function LookupButtonContent({
+  isLookingUp,
+  succeeded,
+}: {
+  isLookingUp: boolean;
+  succeeded: boolean;
+}): React.JSX.Element {
+  if (isLookingUp) {
+    return (
+      <>
+        <LoaderCircleIcon className="h-4 w-4 animate-spin" />
+        Verificando...
+      </>
+    );
+  }
+  if (succeeded) {
+    return (
+      <>
+        <BadgeCheckIcon className="h-4 w-4 text-emerald-500" />
+        Credenciales verificadas
+      </>
+    );
+  }
+  return <>Verificar credenciales SII</>;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                           */
 /* ------------------------------------------------------------------ */
@@ -91,7 +123,13 @@ export function OrganizationRegistrationForm(): React.JSX.Element {
   const [showSiiPassword, setShowSiiPassword] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
 
+  // SII lookup state
+  const [lookupStatus, setLookupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [legalNameFromSii, setLegalNameFromSii] = useState(false);
+
   const isLoading = submitStatus === 'loading';
+  const isLookingUp = lookupStatus === 'loading';
 
   /* ---------------------------------------------------------------- */
   /*  Field helpers                                                    */
@@ -100,11 +138,58 @@ export function OrganizationRegistrationForm(): React.JSX.Element {
   function setOrgField(field: keyof FormState['org'], value: string): void {
     setForm((prev) => ({ ...prev, org: { ...prev.org, [field]: value } }));
     setErrors((prev) => ({ ...prev, org: { ...prev.org, [field]: undefined } }));
+    // Clear SII badge when user manually edits legal name
+    if (field === 'legalName') setLegalNameFromSii(false);
   }
 
   function setAdminField(field: keyof FormState['adminUser'], value: string): void {
     setForm((prev) => ({ ...prev, adminUser: { ...prev.adminUser, [field]: value } }));
     setErrors((prev) => ({ ...prev, adminUser: { ...prev.adminUser, [field]: undefined } }));
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  SII lookup                                                       */
+  /* ---------------------------------------------------------------- */
+
+  async function handleLookupSii(): Promise<void> {
+    if (!form.org.taxIdentifier.trim() || !form.org.taxAuthorityPassword) {
+      setLookupError('Ingresa el RUT y la contraseña SII para verificar.');
+      setLookupStatus('error');
+      return;
+    }
+
+    setLookupStatus('loading');
+    setLookupError(null);
+
+    try {
+      const response = await lookupSii({
+        taxIdentifier: form.org.taxIdentifier.trim(),
+        taxAuthorityPassword: form.org.taxAuthorityPassword,
+      });
+
+      if (response.success && response.data) {
+        setLookupStatus('success');
+        if (response.data.legalName) {
+          setOrgField('legalName', response.data.legalName);
+          setLegalNameFromSii(true);
+        }
+        // Clear credential errors since login succeeded
+        setErrors((prev) => ({
+          ...prev,
+          org: { ...prev.org, taxIdentifier: undefined, taxAuthorityPassword: undefined },
+        }));
+      } else {
+        setLookupStatus('error');
+        setLookupError(response.error ?? 'Error al verificar credenciales SII.');
+      }
+    } catch (err) {
+      setLookupStatus('error');
+      setLookupError(
+        err instanceof HttpError
+          ? err.message
+          : 'Error al conectar con SII. Intenta nuevamente.',
+      );
+    }
   }
 
   /* ---------------------------------------------------------------- */
@@ -226,26 +311,6 @@ export function OrganizationRegistrationForm(): React.JSX.Element {
               Datos de la empresa
             </h2>
 
-            {/* Legal name */}
-            <div className="space-y-1.5">
-              <label htmlFor="legalName" className="text-sm font-medium text-foreground">
-                Nombre legal
-              </label>
-              <input
-                id="legalName"
-                type="text"
-                autoComplete="organization"
-                placeholder="Acme Corp S.A."
-                value={form.org.legalName}
-                onChange={(e) => setOrgField('legalName', e.target.value)}
-                disabled={isLoading}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              {errors.org.legalName && (
-                <p className="text-xs text-destructive">{errors.org.legalName}</p>
-              )}
-            </div>
-
             {/* Tax identifier */}
             <div className="space-y-1.5">
               <label htmlFor="taxIdentifier" className="text-sm font-medium text-foreground">
@@ -296,6 +361,64 @@ export function OrganizationRegistrationForm(): React.JSX.Element {
                 <p className="text-xs text-destructive">{errors.org.taxAuthorityPassword}</p>
               )}
             </div>
+
+            {/* Verify credentials button */}
+            <button
+              type="button"
+              onClick={handleLookupSii}
+              disabled={isLoading || isLookingUp}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            >
+              <LookupButtonContent
+                isLookingUp={isLookingUp}
+                succeeded={lookupStatus === 'success'}
+              />
+            </button>
+
+            {/* Lookup error */}
+            {lookupStatus === 'error' && lookupError && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2">
+                <p className="text-sm text-destructive">{lookupError}</p>
+              </div>
+            )}
+
+            {/* Legal name — read-only display if found from SII, editable input if not */}
+            {legalNameFromSii
+              ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">Nombre legal</span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                        <BadgeCheckIcon className="h-3 w-3" />
+                        Obtenido del SII
+                      </span>
+                    </div>
+                    <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted px-3 py-1 text-sm text-foreground">
+                      {form.org.legalName}
+                    </div>
+                  </div>
+              )
+              : (
+                  <div className="space-y-1.5">
+                    <label htmlFor="legalName" className="text-sm font-medium text-foreground">
+                      Nombre legal
+                    </label>
+                    <input
+                      id="legalName"
+                      type="text"
+                      autoComplete="organization"
+                      placeholder="Verifica las credenciales SII para autocompletar"
+                      value={form.org.legalName}
+                      onChange={(e) => setOrgField('legalName', e.target.value)}
+                      disabled={isLoading}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    {errors.org.legalName && (
+                      <p className="text-xs text-destructive">{errors.org.legalName}</p>
+                    )}
+                  </div>
+              )}
+
           </div>
 
           {/* ---- Admin user toggle ---- */}

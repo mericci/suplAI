@@ -89,7 +89,7 @@ async function getSiiInvoices({
         grossAmount: dteDetail.mntTotal,
         period: resumenDte.periodo,
         documentType: resumenDte.tipoDocDesc,
-        documentTypeCode: resumenDte.tipoDoc,
+        documentTypeNumber: resumenDte.tipoDoc,
         status: mapSiiEventToStatus(dteDetail.dehDescripcion),
         issuerTaxIdentifier:
           dteDetail.rutEmisor != null && dteDetail.dvEmisor != null

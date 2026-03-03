@@ -1,10 +1,9 @@
--- Create document type and invoice status enums, then the invoices table.
+-- Create invoice status enum, then the invoices table.
 -- Invoices belong to an Organization and are issued by a global Supplier.
+-- document_type is stored as TEXT (the SII human-readable description, e.g. "Factura Electronica").
+-- document_type_number is the SII numeric code (e.g. 33).
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'document_type') THEN
-    CREATE TYPE public.document_type AS ENUM ('invoice', 'credit_note', 'debit_note', 'receipt');
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invoice_status') THEN
     CREATE TYPE public.invoice_status AS ENUM ('pending', 'approved', 'rejected');
   END IF;
@@ -22,7 +21,8 @@ CREATE TABLE IF NOT EXISTS public.invoices (
 
   issuer_tax_identifier   TEXT                     NOT NULL,
   receiver_tax_identifier TEXT                     NOT NULL,
-  document_type           public.document_type     NOT NULL,
+  document_type           TEXT                     NOT NULL,
+  document_type_number    INTEGER                  NOT NULL,
   document_number         TEXT                     NOT NULL,
   issue_date              DATE                     NOT NULL,
   due_date                DATE,
