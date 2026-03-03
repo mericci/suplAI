@@ -23,7 +23,6 @@ import getSiiInvoices from '../../sii/actions/get-sii-invoices.ts';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.ts';
 import { upsertOrgSupplier } from './upsert-org-supplier.ts';
 import { upsertInvoice } from './upsert-invoice.ts';
-import { mapSiiDocumentType } from '../helpers/map-document-type.ts';
 
 function currentPeriod(): string {
   const now = new Date();
@@ -94,7 +93,8 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
         supplierId: supplier.id,
         issuerTaxIdentifier: supplierTaxIdentifier,
         receiverTaxIdentifier: org.tax_identifier,
-        documentType: mapSiiDocumentType(invoice.documentTypeCode),
+        documentType: invoice.documentType,
+        documentTypeNumber: invoice.documentTypeNumber,
         documentNumber: invoice.documentNumber,
         issueDate: invoice.issueDate,
         dueDate: invoice.dueDate,
