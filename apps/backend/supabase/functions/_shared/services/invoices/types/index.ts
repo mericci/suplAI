@@ -4,7 +4,6 @@
 
 import type {
   Database,
-  DocumentType,
   InvoiceStatus,
 } from '../../../types/supabase.ts';
 
@@ -17,7 +16,8 @@ export interface InvoicePublic {
   externalUniqueKey: string;
   issuerTaxIdentifier: string;
   receiverTaxIdentifier: string;
-  documentType: DocumentType;
+  documentType: string;
+  documentTypeNumber: number;
   documentNumber: string;
   issueDate: string;
   dueDate: string | null;
@@ -42,6 +42,7 @@ export function toPublic(invoice: InvoiceRow): InvoicePublic {
     issuerTaxIdentifier: invoice.issuer_tax_identifier,
     receiverTaxIdentifier: invoice.receiver_tax_identifier,
     documentType: invoice.document_type,
+    documentTypeNumber: invoice.document_type_number,
     documentNumber: invoice.document_number,
     issueDate: invoice.issue_date,
     dueDate: invoice.due_date,

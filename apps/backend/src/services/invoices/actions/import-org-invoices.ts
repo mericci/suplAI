@@ -11,11 +11,9 @@
 
 import { decrypt } from '../../../commons/encryption/index.js';
 import * as orgDb from '../../../db/organization.db.js';
-import type { DocumentType } from '../../../db/schemas/invoice.schema.js';
 import getSiiInvoices from '../../sii/actions/get-sii-invoices.js';
 import { parseChileanRut } from '../../sii/helpers/parse-rut.js';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.js';
-import { mapSiiDocumentType } from '../helpers/map-document-type.js';
 import { upsertInvoice } from './upsert-invoice.js';
 import { upsertOrgSupplier } from './upsert-org-supplier.js';
 
@@ -75,7 +73,8 @@ export async function importOrgInvoices(
       supplierId: supplier.id,
       issuerTaxIdentifier: supplierTaxIdentifier,
       receiverTaxIdentifier: org.tax_identifier,
-      documentType: mapSiiDocumentType(invoice.documentTypeCode) as DocumentType,
+      documentType: invoice.documentType,
+      documentTypeNumber: invoice.documentTypeNumber,
       documentNumber: invoice.documentNumber,
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,

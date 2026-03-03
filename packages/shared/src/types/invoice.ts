@@ -5,6 +5,7 @@ export interface Invoice {
   issuerTaxIdentifier: string;
   receiverTaxIdentifier: string;
   documentType: string;
+  documentTypeNumber: number;
   documentNumber: string;
   issueDate: string;
   dueDate: string | null;
