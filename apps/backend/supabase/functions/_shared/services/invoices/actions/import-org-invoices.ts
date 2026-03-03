@@ -11,11 +11,9 @@
 
 import { decrypt } from '../../../commons/encryption/index.ts';
 import * as orgDb from '../../../db/organization.db.ts';
-import type { DocumentType } from '../../../db/schemas/invoice.schema.ts';
 import getSiiInvoices from '../../sii/actions/get-sii-invoices.ts';
 import { parseChileanRut } from '../../sii/helpers/parse-rut.ts';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.ts';
-import { mapSiiDocumentType } from '../helpers/map-document-type.ts';
 import { upsertInvoice } from './upsert-invoice.ts';
 import { upsertOrgSupplier } from './upsert-org-supplier.ts';
 
@@ -75,7 +73,8 @@ export async function importOrgInvoices(
       supplierId: supplier.id,
       issuerTaxIdentifier: supplierTaxIdentifier,
       receiverTaxIdentifier: org.tax_identifier,
-      documentType: mapSiiDocumentType(invoice.documentTypeCode) as DocumentType,
+      documentType: invoice.documentType,
+      documentTypeNumber: invoice.documentTypeNumber,
       documentNumber: invoice.documentNumber,
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,

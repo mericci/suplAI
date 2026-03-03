@@ -7,14 +7,6 @@
 
 import { z } from 'zod';
 
-export const DocumentTypeEnum = z.enum([
-  'invoice',
-  'credit_note',
-  'debit_note',
-  'receipt',
-]);
-export type DocumentType = z.infer<typeof DocumentTypeEnum>;
-
 export const InvoiceStatusEnum = z.enum(['pending', 'approved', 'rejected', 'paid']);
 export type InvoiceStatus = z.infer<typeof InvoiceStatusEnum>;
 
@@ -35,7 +27,9 @@ export const UpsertInvoiceSchema = z.object({
     .max(50)
     .trim(),
 
-  documentType: DocumentTypeEnum,
+  documentType: z.string().min(1).trim(),
+
+  documentTypeNumber: z.number().int(),
 
   documentNumber: z
     .string()

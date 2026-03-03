@@ -2,7 +2,7 @@ interface Invoice {
   id: string;
   provider: string;
   documentType: string;
-  documentTypeCode: number;
+  documentTypeNumber: number;
   period: string;
   amount: number;
   netAmount: number;

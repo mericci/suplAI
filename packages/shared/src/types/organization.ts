@@ -27,3 +27,7 @@ export interface RegisterOrganizationData {
   user?: { id: string; email: string };
   session?: { access_token: string; refresh_token: string; expires_in: number };
 }
+
+export interface LookupSiiData {
+  legalName: string | null;
+}
