@@ -4,3 +4,4 @@ export { updateOrganization } from './update-organization.js';
 export { deleteOrganization } from './delete-organization.js';
 export { listOrganizations } from './list-organizations.js';
 export { registerOrganization } from './register-organization.js';
+export { lookupSii } from './lookup-sii.js';

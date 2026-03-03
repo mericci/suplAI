@@ -4,3 +4,4 @@ export { updateOrganizationHandler } from './update-organization.js';
 export { deleteOrganizationHandler } from './delete-organization.js';
 export { listOrganizationsHandler } from './list-organizations.js';
 export { registerOrganizationHandler } from './register-organization.js';
+export { lookupSiiHandler } from './lookup-sii.js';
