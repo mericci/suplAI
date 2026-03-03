@@ -89,7 +89,7 @@ async function getSessionTokens({
   }
 
   // ── Step 3: Follow referencia → misiir.sii.cl ──────────────────────────
-  await client.get('https://misiir.sii.cl/cgi_misii/siihome.cgi', {
+  const misiirResp = await client.get('https://misiir.sii.cl/cgi_misii/siihome.cgi', {
     headers: {
       ...BROWSER_HEADERS,
       Host: 'misiir.sii.cl',
@@ -99,6 +99,7 @@ async function getSessionTokens({
       'Sec-Fetch-Site': 'same-site',
     },
   });
+  const misiirHtml: string = typeof misiirResp.data === 'string' ? misiirResp.data : '';
 
   // ── Step 4: Visit consemitidos to warm up the www4 session ────────────
   // Non-fatal: TOKEN is already set by Step 3. This GET may 503 occasionally.
@@ -126,7 +127,24 @@ async function getSessionTokens({
     throw new Error('TOKEN no encontrado tras autenticación.');
   }
 
-  return { siiToken: tokenCookie.value, client };
+  return { siiToken: tokenCookie.value, client, legalName: parseLegalName(misiirHtml) };
+}
+
+/**
+ * Attempt to extract the company's razón social from the Mi SII home page HTML.
+ * Returns null if the pattern is not found (non-fatal — user can type it manually).
+ */
+function parseLegalName(html: string): string | null {
+  if (!html) return null;
+
+  // The SII home page embeds taxpayer data as a JS variable: DatosCntrNow = {...}
+  // Extract razonSocial from that JSON blob — most reliable source.
+  const match = html.match(/"razonSocial"\s*:\s*"([^"]+)"/);
+  if (match) {
+    return match[1].replace(/\s+/g, ' ').trim();
+  }
+
+  return null;
 }
 
 export default getSessionTokens;
