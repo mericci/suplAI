@@ -4,3 +4,7 @@ export { updateSupplierHandler } from './update-supplier.ts';
 export { deleteSupplierHandler } from './delete-supplier.ts';
 export { listSuppliersHandler } from './list-suppliers.ts';
 export { listSuppliersByOrgHandler } from './list-suppliers-by-org.ts';
+export { extractSupplierDocumentHandler } from './extract-supplier-document.ts';
+export { createSupplierDocumentHandler } from './create-supplier-document.ts';
+export { listSupplierDocumentsHandler } from './list-supplier-documents.ts';
+export { getSupplierDocumentPreviewUrlHandler } from './get-supplier-document-preview-url.ts';
