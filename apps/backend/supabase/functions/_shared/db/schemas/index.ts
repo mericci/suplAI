@@ -63,12 +63,10 @@ export {
 
 // Invoice Schemas
 export {
-  DocumentTypeEnum,
   InvoiceStatusEnum,
   UpsertInvoiceSchema,
   UpdateInvoiceSchema,
   InvoiceListFiltersSchema,
-  type DocumentType,
   type InvoiceStatus,
   type UpsertInvoiceInput,
   type UpdateInvoiceInput,
