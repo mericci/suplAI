@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   ClockIcon,
@@ -55,7 +55,6 @@ function getDisplayName(profile: UserProfile | null): string {
 
 export function AppSidebar(): React.JSX.Element {
   const pathname = usePathname();
-  const router = useRouter();
   const { signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
@@ -71,7 +70,7 @@ export function AppSidebar(): React.JSX.Element {
 
   async function handleSignOut(): Promise<void> {
     await signOut();
-    router.push('/login');
+    window.location.href = '/login';
   }
 
   return (
