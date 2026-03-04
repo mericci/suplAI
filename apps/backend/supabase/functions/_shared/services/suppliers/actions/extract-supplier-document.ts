@@ -6,7 +6,7 @@
 
 import { logger } from '../../../utils/logger.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
-import type { ExtractedDocumentData } from '@supl/shared';
+import type { ExtractedDocumentData } from '../../../types/supplier-document.ts';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-6';

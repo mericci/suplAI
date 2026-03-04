@@ -3,7 +3,7 @@
  */
 
 import type { Database } from '../../../types/supabase.ts';
-import type { SupplierDocument } from '@supl/shared';
+import type { SupplierDocument } from '../../../types/supplier-document.ts';
 import type { SupplierDocumentRow } from '../../../db/supplier-document.db.ts';
 
 type SupplierRow = Database['public']['Tables']['suppliers']['Row'];

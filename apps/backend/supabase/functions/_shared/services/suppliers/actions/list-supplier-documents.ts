@@ -1,7 +1,7 @@
 import { logger } from '../../../utils/logger.ts';
 import * as supplierDocumentDb from '../../../db/supplier-document.db.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
-import type { SupplierDocument } from '@supl/shared';
+import type { SupplierDocument } from '../../../types/supplier-document.ts';
 import { toPublicDocument } from '../types/index.ts';
 
 export async function listSupplierDocuments(supplierId: string): Promise<SupplierDocument[]> {
