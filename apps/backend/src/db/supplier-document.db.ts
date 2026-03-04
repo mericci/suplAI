@@ -5,8 +5,12 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.js';
 import type { SupplierDocumentAmount } from '@supl/shared';
+import { supabase } from '../lib/supabase.js';
+
+// supplier_documents is not yet in the Supabase-generated Database type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 
 export interface SupplierDocumentRow {
   id: string;
@@ -42,7 +46,7 @@ export interface CreateSupplierDocumentData {
  * Create a new supplier document record.
  */
 export async function create(data: CreateSupplierDocumentData): Promise<SupplierDocumentRow> {
-  const { data: doc, error } = await (supabase as any)
+  const { data: doc, error } = await db
     .from('supplier_documents')
     .insert({
       supplier_id: data.supplier_id,
@@ -67,7 +71,7 @@ export async function create(data: CreateSupplierDocumentData): Promise<Supplier
  * List active documents for a supplier, ordered by creation date ascending.
  */
 export async function findBySupplier(supplierId: string): Promise<SupplierDocumentRow[]> {
-  const { data, error } = await (supabase as any)
+  const { data, error } = await db
     .from('supplier_documents')
     .select('*')
     .eq('supplier_id', supplierId)
@@ -82,7 +86,7 @@ export async function findBySupplier(supplierId: string): Promise<SupplierDocume
  * Find a single active document by ID.
  */
 export async function findById(id: string): Promise<SupplierDocumentRow | null> {
-  const { data, error } = await (supabase as any)
+  const { data, error } = await db
     .from('supplier_documents')
     .select('*')
     .eq('id', id)
@@ -100,7 +104,7 @@ export async function findById(id: string): Promise<SupplierDocumentRow | null> 
  * Soft-delete a document by ID.
  */
 export async function softDelete(id: string): Promise<void> {
-  const { error } = await (supabase as any)
+  const { error } = await db
     .from('supplier_documents')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)

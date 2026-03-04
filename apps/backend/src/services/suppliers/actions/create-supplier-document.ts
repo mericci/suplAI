@@ -4,11 +4,11 @@
  * Validates and persists a supplier document record.
  */
 
+import type { SupplierDocument, SupplierDocumentAmount } from '@supl/shared';
 import { logger } from '../../../utils/logger.js';
 import * as supplierDocumentDb from '../../../db/supplier-document.db.js';
 import { validateCreateSupplierDocument } from '../../../db/schemas/supplier-document.schema.js';
 import { getErrorMessage } from '../../../utils/error.js';
-import type { SupplierDocument, SupplierDocumentAmount } from '@supl/shared';
 import { toPublicDocument } from '../types/index.js';
 
 export async function createSupplierDocument(data: unknown): Promise<SupplierDocument> {

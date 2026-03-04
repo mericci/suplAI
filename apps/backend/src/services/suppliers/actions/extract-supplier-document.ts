@@ -5,13 +5,14 @@
  * and returns structured supplier/service data extracted from the document.
  */
 
+import type { ExtractedDocumentData } from '@supl/shared';
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/error.js';
-import type { ExtractedDocumentData } from '@supl/shared';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-6';
 
+/* eslint-disable max-len */
 const SYSTEM_PROMPT = `Eres un experto analizador de documentos comerciales chilenos.
 Tu tarea es extraer información estructurada de documentos como boletas, contratos, cotizaciones o facturas.
 
@@ -36,6 +37,7 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
 
 Si no puedes determinar un valor, usa null. Para amounts, usa un array vacío [] si no hay montos identificables.
 No incluyas texto adicional fuera del JSON.`;
+/* eslint-enable max-len */
 
 export async function extractSupplierDocument(
   fileBytes: Uint8Array,
@@ -72,7 +74,9 @@ export async function extractSupplierDocument(
       },
     };
   } else {
-    throw new Error(`Unsupported file type: ${mimeType}. Supported types: PDF, JPEG, PNG, GIF, WebP`);
+    throw new Error(
+      `Unsupported file type: ${mimeType}. Supported types: PDF, JPEG, PNG, GIF, WebP`,
+    );
   }
 
   logger.info('Calling Claude API for document extraction', { mimeType });
