@@ -51,7 +51,9 @@ export async function extractSupplierDocumentHandler(req: Request): Promise<Resp
     const mimeType = getMimeType(file);
     const supportedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!supportedTypes.includes(mimeType)) {
-      return validationError(`Unsupported file type: ${mimeType}. Supported: PDF, JPEG, PNG, GIF, WebP`);
+      return validationError(
+        `Unsupported file type: ${mimeType}. Supported: PDF, JPEG, PNG, GIF, WebP`,
+      );
     }
 
     const buffer = await file.arrayBuffer();

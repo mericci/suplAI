@@ -2,8 +2,8 @@
  * Supplier Service Types
  */
 
-import type { Database } from '../../../types/supabase.js';
 import type { SupplierDocument } from '@supl/shared';
+import type { Database } from '../../../types/supabase.js';
 import type { SupplierDocumentRow } from '../../../db/supplier-document.db.js';
 
 type SupplierRow = Database['public']['Tables']['suppliers']['Row'];

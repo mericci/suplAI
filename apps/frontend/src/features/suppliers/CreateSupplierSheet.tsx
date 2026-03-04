@@ -172,12 +172,12 @@ export function CreateSupplierSheet({
         setExtractionError('No se pudo analizar el documento. Puedes completar los datos manualmente.');
       } else {
         applyExtracted(res.data);
+        setStep('form');
       }
     } catch {
       setExtractionError('Error al analizar el documento. Puedes completar los datos manualmente.');
     } finally {
       setStatus('idle');
-      setStep('form');
     }
   }
 

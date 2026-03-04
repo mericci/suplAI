@@ -4,10 +4,10 @@
  * Returns all active documents associated with a supplier.
  */
 
+import type { SupplierDocument } from '@supl/shared';
 import { logger } from '../../../utils/logger.js';
 import * as supplierDocumentDb from '../../../db/supplier-document.db.js';
 import { getErrorMessage } from '../../../utils/error.js';
-import type { SupplierDocument } from '@supl/shared';
 import { toPublicDocument } from '../types/index.js';
 
 export async function listSupplierDocuments(supplierId: string): Promise<SupplierDocument[]> {
