@@ -3,7 +3,7 @@
  */
 
 import { supabase } from '../lib/supabase.ts';
-import type { SupplierDocumentAmount } from '@supl/shared';
+import type { SupplierDocumentAmount } from '../types/supplier-document.ts';
 
 export interface SupplierDocumentRow {
   id: string;

@@ -2,7 +2,7 @@ import { logger } from '../../../utils/logger.ts';
 import * as supplierDocumentDb from '../../../db/supplier-document.db.ts';
 import { validateCreateSupplierDocument } from '../../../db/schemas/supplier-document.schema.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
-import type { SupplierDocument, SupplierDocumentAmount } from '@supl/shared';
+import type { SupplierDocument, SupplierDocumentAmount } from '../../../types/supplier-document.ts';
 import { toPublicDocument } from '../types/index.ts';
 
 export async function createSupplierDocument(data: unknown): Promise<SupplierDocument> {

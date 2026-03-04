@@ -1,5 +1,5 @@
 import { extractSupplierDocument as extractAction } from '../actions/extract-supplier-document.ts';
-import type { ExtractedDocumentData } from '@supl/shared';
+import type { ExtractedDocumentData } from '../../../types/supplier-document.ts';
 
 export async function extractSupplierDocument(
   fileBytes: Uint8Array,
