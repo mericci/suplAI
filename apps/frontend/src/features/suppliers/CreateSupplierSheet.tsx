@@ -1,9 +1,12 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { PlusIcon, UploadIcon, FileIcon, XIcon } from 'lucide-react';
+import {
+  PlusIcon, UploadIcon, FileIcon, XIcon, PlusCircleIcon, Loader2Icon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Sheet,
   SheetContent,
@@ -12,14 +15,28 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { upsertSupplier } from '@/integrations/backend/suppliers';
+import { upsertSupplier, extractSupplierDocument, createSupplierDocument } from '@/integrations/backend/suppliers';
+import type { ExtractedDocumentData } from '@/integrations/backend/suppliers';
 import { createClient } from '@/lib/supabase/client';
 
-type Status = 'idle' | 'loading' | 'success' | 'error';
+type Status = 'idle' | 'extracting' | 'loading' | 'success' | 'error';
+type Step = 'upload' | 'form';
+
+interface Amount {
+  amount: string;
+  currency: string;
+  concept: string;
+  frequency: string;
+}
 
 interface FormFields {
   legalName: string;
   taxIdentifier: string;
+  serviceDescription: string;
+  serviceCategory: string;
+  tariffType: string;
+  tariffDetail: string;
+  amounts: Amount[];
 }
 
 interface FieldErrors {
@@ -27,12 +44,17 @@ interface FieldErrors {
   taxIdentifier?: string;
 }
 
-interface CreateSupplierSheetProps {
+export interface CreateSupplierSheetProps {
   onSuccess?: () => void;
+  /** If provided, the sheet will be pre-scoped to this supplier (skip upsert, add doc only) */
+  supplierId?: string;
+  /** Trigger element override — if not provided, renders the default "Nuevo proveedor" button */
+  trigger?: React.ReactNode;
 }
 
-// After stripping dots, a valid Chilean RUT is digits + dash + digit-or-K
 const RUT_PATTERN = /^\d{1,9}-[\dkK]$/;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -40,35 +62,58 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function emptyAmount(): Amount {
+  return {
+    amount: '', currency: 'CLP', concept: '', frequency: 'Mensual',
+  };
+}
+
 export function CreateSupplierSheet({
   onSuccess,
+  supplierId: presetSupplierId,
+  trigger,
 }: CreateSupplierSheetProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<Step>(presetSupplierId ? 'form' : 'upload');
+  const [status, setStatus] = useState<Status>('idle');
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [fileUploadWarning, setFileUploadWarning] = useState<string | null>(null);
+
+  // File state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Form fields
   const [fields, setFields] = useState<FormFields>({
     legalName: '',
     taxIdentifier: '',
+    serviceDescription: '',
+    serviceCategory: '',
+    tariffType: '',
+    tariffDetail: '',
+    amounts: [],
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [status, setStatus] = useState<Status>('idle');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [fileUploadWarning, setFileUploadWarning] = useState<string | null>(
-    null,
-  );
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function setField<K extends keyof FormFields>(
-    key: K,
-    value: FormFields[K],
-  ): void {
+  function setField<K extends keyof FormFields>(key: K, value: FormFields[K]): void {
     setFields((prev) => ({ ...prev, [key]: value }));
-    if (fieldErrors[key]) {
+    if (key in fieldErrors) {
       setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
     }
   }
 
   function handleFileSelect(file: File): void {
+    setExtractionError(null);
+    if (file.size > MAX_FILE_SIZE) {
+      setExtractionError('El archivo supera el límite de 10MB');
+      return;
+    }
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setExtractionError('Tipo de archivo no soportado. Usa PDF, JPG, PNG, GIF o WebP.');
+      return;
+    }
     setSelectedFile(file);
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -79,9 +124,7 @@ export function CreateSupplierSheet({
     }
   }
 
-  function handleFileInputChange(
-    e: React.ChangeEvent<HTMLInputElement>,
-  ): void {
+  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
     if (file) handleFileSelect(file);
   }
@@ -95,32 +138,69 @@ export function CreateSupplierSheet({
   function removeFile(): void {
     setSelectedFile(null);
     setFilePreview(null);
+    setExtractionError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  function validate(): boolean {
-    const errors: FieldErrors = {};
+  function applyExtracted(data: ExtractedDocumentData): void {
+    setFields((prev) => ({
+      ...prev,
+      legalName: data.supplierName ?? prev.legalName,
+      taxIdentifier: data.supplierRut ?? prev.taxIdentifier,
+      serviceDescription: data.serviceDescription ?? prev.serviceDescription,
+      serviceCategory: data.serviceCategory ?? prev.serviceCategory,
+      tariffType: data.tariffType ?? prev.tariffType,
+      tariffDetail: data.tariffDetail ?? prev.tariffDetail,
+      amounts: data.amounts.length > 0
+        ? data.amounts.map((a) => ({
+          amount: String(a.amount),
+          currency: a.currency,
+          concept: a.concept,
+          frequency: a.frequency,
+        }))
+        : prev.amounts,
+    }));
+  }
 
+  async function handleAnalyzeDocument(): Promise<void> {
+    if (!selectedFile) return;
+    setStatus('extracting');
+    setExtractionError(null);
+    try {
+      const res = await extractSupplierDocument(selectedFile);
+      if (!res.success || !res.data) {
+        setExtractionError('No se pudo analizar el documento. Puedes completar los datos manualmente.');
+      } else {
+        applyExtracted(res.data);
+        setStep('form');
+      }
+    } catch {
+      setExtractionError('Error al analizar el documento. Puedes completar los datos manualmente.');
+    } finally {
+      setStatus('idle');
+    }
+  }
+
+  function validate(): boolean {
+    if (presetSupplierId) return true; // Skip supplier validation if pre-scoped
+
+    const errors: FieldErrors = {};
     if (!fields.legalName.trim()) {
       errors.legalName = 'El nombre legal es obligatorio';
     } else if (fields.legalName.trim().length < 2) {
       errors.legalName = 'Debe tener al menos 2 caracteres';
     }
-
     const cleanedRut = fields.taxIdentifier.trim().replace(/\./g, '');
     if (!cleanedRut) {
       errors.taxIdentifier = 'El RUT es obligatorio';
     } else if (!RUT_PATTERN.test(cleanedRut)) {
       errors.taxIdentifier = 'Ingresa un RUT válido (ej: 12345678-9)';
     }
-
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
 
-  async function handleSubmit(
-    e: React.FormEvent<HTMLFormElement>,
-  ): Promise<void> {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setApiError(null);
     setFileUploadWarning(null);
@@ -129,50 +209,84 @@ export function CreateSupplierSheet({
     setStatus('loading');
 
     try {
-      const res = await upsertSupplier({
-        legalName: fields.legalName.trim(),
-        taxIdentifier: fields.taxIdentifier.trim(),
-      });
+      let supplierId = presetSupplierId ?? null;
 
-      if (!res.success) {
-        setApiError(res.error ?? 'Ocurrió un error al crear el proveedor');
-        setStatus('error');
-        return;
+      // Step 1: upsert supplier (only if not pre-scoped)
+      if (!supplierId) {
+        const res = await upsertSupplier({
+          legalName: fields.legalName.trim(),
+          taxIdentifier: fields.taxIdentifier.trim(),
+        });
+        if (!res.success || !res.data) {
+          setApiError(res.error ?? 'Error al crear el proveedor');
+          setStatus('error');
+          return;
+        }
+        supplierId = res.data.id;
       }
 
-      // File upload — best-effort after supplier is created
-      if (selectedFile && res.data) {
+      // Step 2: upload file to Supabase Storage (if any)
+      let storagePath: string | null = null;
+      if (selectedFile && supplierId) {
         try {
           const supabase = createClient();
           const ext = selectedFile.name.split('.').pop() ?? 'bin';
-          const path = `${res.data.id}/${Date.now()}.${ext}`;
+          const path = `${supplierId}/${Date.now()}.${ext}`;
           const { error: uploadError } = await supabase.storage
             .from('supplier-evidence')
             .upload(path, selectedFile, { upsert: false });
 
           if (uploadError) {
             setFileUploadWarning(
-              'El proveedor fue creado pero el archivo no pudo subirse. Inténtalo nuevamente.',
+              'El proveedor fue guardado pero el archivo no pudo subirse. Inténtalo nuevamente.',
             );
+          } else {
+            storagePath = path;
           }
         } catch {
-          setFileUploadWarning(
-            'El proveedor fue creado pero el archivo no pudo subirse.',
-          );
+          setFileUploadWarning('El archivo no pudo subirse, pero el proveedor fue guardado.');
+        }
+      }
+
+      // Step 3: create document record if there's a file or service data
+      const hasServiceData = fields.serviceDescription || fields.serviceCategory
+        || fields.tariffType || fields.tariffDetail || fields.amounts.length > 0;
+
+      if (storagePath && supplierId && (hasServiceData || storagePath)) {
+        const docRes = await createSupplierDocument(supplierId, {
+          fileName: selectedFile!.name,
+          storagePath,
+          documentType: null,
+          serviceCategory: fields.serviceCategory || null,
+          serviceDescription: fields.serviceDescription || null,
+          tariffType: fields.tariffType || null,
+          tariffDetail: fields.tariffDetail || null,
+          amounts: fields.amounts
+            .filter((a) => a.concept && a.amount)
+            .map((a) => ({
+              amount: parseFloat(a.amount) || 0,
+              currency: a.currency,
+              concept: a.concept,
+              frequency: a.frequency,
+            })),
+        });
+        if (!docRes.success) {
+          setFileUploadWarning('Proveedor guardado, pero hubo un error al registrar el documento.');
         }
       }
 
       setStatus('success');
     } catch (err) {
-      setApiError(
-        err instanceof Error ? err.message : 'Ocurrió un error inesperado',
-      );
+      setApiError(err instanceof Error ? err.message : 'Ocurrió un error inesperado');
       setStatus('error');
     }
   }
 
   function handleReset(): void {
-    setFields({ legalName: '', taxIdentifier: '' });
+    setStep(presetSupplierId ? 'form' : 'upload');
+    setFields({
+      legalName: '', taxIdentifier: '', serviceDescription: '', serviceCategory: '', tariffType: '', tariffDetail: '', amounts: [],
+    });
     setFieldErrors({});
     setApiError(null);
     setFileUploadWarning(null);
@@ -184,40 +298,48 @@ export function CreateSupplierSheet({
     if (!value) {
       if (status === 'success') onSuccess?.();
       setOpen(false);
-      // Delay reset so the close animation finishes
       setTimeout(handleReset, 300);
     } else {
       setOpen(true);
     }
   }
 
-  const isLoading = status === 'loading';
+  const isLoading = status === 'loading' || status === 'extracting';
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <Button size="sm" onClick={() => setOpen(true)}>
-        <PlusIcon className="h-4 w-4" />
-        Nuevo proveedor
-      </Button>
+      {trigger ? (
+        <div onClick={() => setOpen(true)} className="cursor-pointer">{trigger}</div>
+      ) : (
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <PlusIcon className="h-4 w-4" />
+          Nuevo proveedor
+        </Button>
+      )}
 
-      <SheetContent side="right" className="flex flex-col overflow-hidden p-0">
+      <SheetContent side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-lg">
         <SheetHeader className="border-b px-4 py-4">
-          <SheetTitle>Nuevo proveedor</SheetTitle>
+          <SheetTitle>{presetSupplierId ? 'Agregar documento' : 'Nuevo proveedor'}</SheetTitle>
           <SheetDescription>
-            Registra un proveedor manualmente con sus datos y documentación.
+            {step === 'upload'
+              ? 'Sube un documento para autocompletar los datos del proveedor con IA.'
+              : 'Revisa y completa la información del proveedor y servicio.'}
           </SheetDescription>
         </SheetHeader>
 
-        {status === 'success' ? (
-          /* ── Success state ── */
+        {status === 'success' && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-8 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
               <span className="text-2xl">✓</span>
             </div>
             <div>
-              <p className="text-base font-semibold">Proveedor creado</p>
+              <p className="text-base font-semibold">
+                {presetSupplierId ? 'Documento agregado' : 'Proveedor creado'}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {fields.legalName} fue registrado correctamente.
+                {presetSupplierId
+                  ? 'El documento fue registrado correctamente.'
+                  : `${fields.legalName} fue registrado correctamente.`}
               </p>
             </div>
             {fileUploadWarning && (
@@ -227,197 +349,374 @@ export function CreateSupplierSheet({
             )}
             <div className="flex gap-3">
               <Button variant="outline" onClick={handleReset}>
-                Crear otro
+                Agregar otro
               </Button>
               <Button onClick={() => handleOpenChange(false)}>
-                Ver proveedores
+                {presetSupplierId ? 'Ver documentos' : 'Ver proveedores'}
               </Button>
             </div>
           </div>
-        ) : (
-          /* ── Form ── */
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="flex flex-1 flex-col overflow-hidden"
-          >
-            {/* Scrollable fields area */}
+        )}
+        {status !== 'success' && step === 'upload' && (
+          /* ── Step 1: Document upload ── */
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
+              {extractionError && (
+                <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                  {extractionError}
+                </div>
+              )}
+
+              {selectedFile ? (
+                <div className="overflow-hidden rounded-lg border bg-muted/30">
+                  {filePreview ? (
+                    <>
+                      <div className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={filePreview} alt="Vista previa" className="h-48 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={removeFile}
+                          className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                          aria-label="Eliminar archivo"
+                        >
+                          <XIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="border-t px-3 py-2">
+                        <p className="truncate text-xs text-muted-foreground">
+                          {selectedFile.name} — {formatFileSize(selectedFile.size)}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <FileIcon className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{selectedFile.name}</p>
+                        <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeFile}
+                        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="Eliminar archivo"
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={(e) => e.preventDefault()}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+                  role="button"
+                  tabIndex={0}
+                  className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed border-border bg-muted/10 px-4 py-12 text-center transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                    <UploadIcon className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Subir documento para autocompletar</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      PDF, JPG, PNG, GIF o WebP — máx. 10MB
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      La IA extraerá los datos del proveedor y servicio automáticamente
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+                onChange={handleFileInputChange}
+              />
+            </div>
+
+            <div className="border-t px-4 py-4 space-y-2">
+              {selectedFile && (
+                <Button
+                  className="w-full"
+                  onClick={handleAnalyzeDocument}
+                  disabled={status === 'extracting'}
+                >
+                  {status === 'extracting' ? (
+                    <>
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                      Analizando documento...
+                    </>
+                  ) : (
+                    'Analizar con IA y continuar'
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => setStep('form')}
+              >
+                Completar manualmente
+              </Button>
+            </div>
+          </div>
+        )}
+        {status !== 'success' && step === 'form' && (
+          /* ── Step 2: Review & edit form ── */
+          <form onSubmit={handleSubmit} noValidate className="flex flex-1 flex-col overflow-hidden">
             <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
-              {/* API error banner */}
               {apiError && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {apiError}
                 </div>
               )}
 
-              {/* ── Datos del proveedor ── */}
+              {/* Supplier section (hidden if pre-scoped) */}
+              {!presetSupplierId && (
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Datos del proveedor
+                  </p>
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="legalName" className="text-sm font-medium leading-none">
+                        Nombre legal <span className="text-destructive">*</span>
+                      </label>
+                      <Input
+                        id="legalName"
+                        type="text"
+                        placeholder="Empresa S.A."
+                        value={fields.legalName}
+                        onChange={(e) => setField('legalName', e.target.value)}
+                        aria-invalid={!!fieldErrors.legalName}
+                        disabled={isLoading}
+                      />
+                      {fieldErrors.legalName && (
+                        <p className="text-xs text-destructive">{fieldErrors.legalName}</p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="taxIdentifier" className="text-sm font-medium leading-none">
+                        RUT <span className="text-destructive">*</span>
+                      </label>
+                      <Input
+                        id="taxIdentifier"
+                        type="text"
+                        placeholder="12345678-9"
+                        value={fields.taxIdentifier}
+                        onChange={(e) => setField('taxIdentifier', e.target.value)}
+                        aria-invalid={!!fieldErrors.taxIdentifier}
+                        disabled={isLoading}
+                      />
+                      {fieldErrors.taxIdentifier ? (
+                        <p className="text-xs text-destructive">{fieldErrors.taxIdentifier}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Formato: 12345678-9 o 12.345.678-9</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Service section */}
               <div>
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Datos del proveedor
+                  Servicio (opcional)
                 </p>
                 <div className="space-y-4">
                   <div className="flex flex-col gap-1.5">
-                    <label
-                      htmlFor="legalName"
-                      className="text-sm font-medium leading-none"
-                    >
-                      Nombre legal{' '}
-                      <span className="text-destructive">*</span>
+                    <label htmlFor="serviceCategory" className="text-sm font-medium leading-none">
+                      Categoría del servicio
                     </label>
                     <Input
-                      id="legalName"
+                      id="serviceCategory"
                       type="text"
-                      placeholder="Empresa S.A."
-                      value={fields.legalName}
-                      onChange={(e) => setField('legalName', e.target.value)}
-                      aria-invalid={!!fieldErrors.legalName}
+                      placeholder="ej: Consultoría, Arriendo, Software"
+                      value={fields.serviceCategory}
+                      onChange={(e) => setField('serviceCategory', e.target.value)}
                       disabled={isLoading}
                     />
-                    {fieldErrors.legalName && (
-                      <p className="text-xs text-destructive">
-                        {fieldErrors.legalName}
-                      </p>
-                    )}
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label
-                      htmlFor="taxIdentifier"
-                      className="text-sm font-medium leading-none"
-                    >
-                      RUT <span className="text-destructive">*</span>
+                    <label htmlFor="serviceDescription" className="text-sm font-medium leading-none">
+                      Descripción del servicio
+                    </label>
+                    <Textarea
+                      id="serviceDescription"
+                      placeholder="Describe el servicio prestado por este proveedor..."
+                      value={fields.serviceDescription}
+                      onChange={(e) => setField('serviceDescription', e.target.value)}
+                      disabled={isLoading}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="tariffType" className="text-sm font-medium leading-none">
+                      Tipo de tarifa
                     </label>
                     <Input
-                      id="taxIdentifier"
+                      id="tariffType"
                       type="text"
-                      placeholder="12345678-9"
-                      value={fields.taxIdentifier}
-                      onChange={(e) =>
-                        setField('taxIdentifier', e.target.value)
-                      }
-                      aria-invalid={!!fieldErrors.taxIdentifier}
+                      placeholder="ej: Fijo en CLP, Variable por hora"
+                      value={fields.tariffType}
+                      onChange={(e) => setField('tariffType', e.target.value)}
                       disabled={isLoading}
                     />
-                    {fieldErrors.taxIdentifier ? (
-                      <p className="text-xs text-destructive">
-                        {fieldErrors.taxIdentifier}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Formato: 12345678-9 o 12.345.678-9
-                      </p>
-                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="tariffDetail" className="text-sm font-medium leading-none">
+                      Detalle de tarifa
+                    </label>
+                    <Textarea
+                      id="tariffDetail"
+                      placeholder="Condiciones, descuentos u observaciones adicionales..."
+                      value={fields.tariffDetail}
+                      onChange={(e) => setField('tariffDetail', e.target.value)}
+                      disabled={isLoading}
+                      rows={2}
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* ── Documentación ── */}
+              {/* Amounts section */}
               <div>
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Documentación (opcional)
+                  Montos (opcional)
                 </p>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium leading-none">
-                    Evidencia de estructura de costos
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    Sube cualquier archivo que acredite la relación de
-                    estructura de costos con este proveedor.
-                  </p>
-
-                  {selectedFile ? (
-                    <div className="mt-2 overflow-hidden rounded-lg border bg-muted/30">
-                      {filePreview ? (
-                        /* Image preview */
-                        <>
-                          <div className="relative">
-                            <img
-                              src={filePreview}
-                              alt="Vista previa"
-                              className="h-40 w-full object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={removeFile}
-                              className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
-                              aria-label="Eliminar archivo"
-                            >
-                              <XIcon className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                          <div className="border-t px-3 py-2">
-                            <p className="truncate text-xs text-muted-foreground">
-                              {selectedFile.name} —{' '}
-                              {formatFileSize(selectedFile.size)}
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        /* Non-image file row */
-                        <div className="flex items-center gap-3 p-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                            <FileIcon className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">
-                              {selectedFile.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatFileSize(selectedFile.size)}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={removeFile}
-                            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            aria-label="Eliminar archivo"
-                          >
-                            <XIcon className="h-4 w-4" />
-                          </button>
+                <div className="space-y-3">
+                  {fields.amounts.map((amount, idx) => (
+                    <div key={idx} className="relative rounded-lg border bg-muted/20 p-3">
+                      <button
+                        type="button"
+                        onClick={() => setField('amounts', fields.amounts.filter((_, i) => i !== idx))}
+                        className="absolute right-2 top-2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                        aria-label="Eliminar monto"
+                      >
+                        <XIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2 flex flex-col gap-1">
+                          <label className="text-xs text-muted-foreground">Concepto</label>
+                          <Input
+                            placeholder="ej: Renta mensual"
+                            value={amount.concept}
+                            onChange={(e) => {
+                              const updated = [...fields.amounts];
+                              updated[idx] = { ...updated[idx], concept: e.target.value };
+                              setField('amounts', updated);
+                            }}
+                            disabled={isLoading}
+                          />
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    /* Drop zone */
-                    <div
-                      onDrop={handleDrop}
-                      onDragOver={(e) => e.preventDefault()}
-                      onClick={() => fileInputRef.current?.click()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ')
-                          fileInputRef.current?.click();
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      className="mt-2 flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                        <UploadIcon className="h-5 w-5 text-muted-foreground" />
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-muted-foreground">Monto</label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={amount.amount}
+                            onChange={(e) => {
+                              const updated = [...fields.amounts];
+                              updated[idx] = { ...updated[idx], amount: e.target.value };
+                              setField('amounts', updated);
+                            }}
+                            disabled={isLoading}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-muted-foreground">Moneda</label>
+                          <Input
+                            placeholder="CLP"
+                            value={amount.currency}
+                            onChange={(e) => {
+                              const updated = [...fields.amounts];
+                              updated[idx] = { ...updated[idx], currency: e.target.value };
+                              setField('amounts', updated);
+                            }}
+                            disabled={isLoading}
+                          />
+                        </div>
+                        <div className="col-span-2 flex flex-col gap-1">
+                          <label className="text-xs text-muted-foreground">Frecuencia</label>
+                          <Input
+                            placeholder="ej: Mensual, Por hora, Único"
+                            value={amount.frequency}
+                            onChange={(e) => {
+                              const updated = [...fields.amounts];
+                              updated[idx] = { ...updated[idx], frequency: e.target.value };
+                              setField('amounts', updated);
+                            }}
+                            disabled={isLoading}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">
-                          Haz clic o arrastra un archivo
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          PDF, imagen, Word, Excel u otro
-                        </p>
-                      </div>
                     </div>
-                  )}
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="sr-only"
-                    onChange={handleFileInputChange}
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setField('amounts', [...fields.amounts, emptyAmount()])}
                     disabled={isLoading}
-                  />
+                  >
+                    <PlusCircleIcon className="mr-2 h-4 w-4" />
+                    Agregar monto
+                  </Button>
                 </div>
               </div>
+
+              {/* Uploaded file summary */}
+              {selectedFile && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Documento de respaldo
+                  </p>
+                  <div className="flex items-center gap-3 rounded-lg border bg-muted/20 p-3">
+                    <FileIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{selectedFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeFile}
+                      className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label="Eliminar archivo"
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Sticky footer */}
             <SheetFooter className="border-t px-4 py-4">
+              {!presetSupplierId && step === 'form' && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStep('upload')}
+                  disabled={isLoading}
+                  className="mr-auto"
+                >
+                  ← Volver
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -427,7 +726,7 @@ export function CreateSupplierSheet({
                 Cancelar
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Creando...' : 'Crear proveedor'}
+                {isLoading ? 'Guardando...' : 'Guardar proveedor'}
               </Button>
             </SheetFooter>
           </form>

@@ -4,3 +4,7 @@ export { updateSupplierHandler } from './update-supplier.js';
 export { deleteSupplierHandler } from './delete-supplier.js';
 export { listSuppliersHandler } from './list-suppliers.js';
 export { listSuppliersByOrgHandler } from './list-suppliers-by-org.js';
+export { extractSupplierDocumentHandler } from './extract-supplier-document.js';
+export { createSupplierDocumentHandler } from './create-supplier-document.js';
+export { listSupplierDocumentsHandler } from './list-supplier-documents.js';
+export { getSupplierDocumentPreviewUrlHandler } from './get-supplier-document-preview-url.js';

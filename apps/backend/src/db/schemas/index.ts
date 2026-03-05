@@ -75,3 +75,10 @@ export {
   validateUpdateInvoice,
   validateInvoiceListFilters,
 } from './invoice.schema.js';
+
+// Supplier Document Schemas
+export {
+  CreateSupplierDocumentSchema,
+  type CreateSupplierDocumentInput,
+  validateCreateSupplierDocument,
+} from './supplier-document.schema.js';
