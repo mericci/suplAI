@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { SearchIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  InfoIcon,
+} from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -47,6 +53,7 @@ interface Pagination {
 }
 
 export function SuppliersList(): React.JSX.Element {
+  const router = useRouter();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -204,7 +211,11 @@ export function SuppliersList(): React.JSX.Element {
                 </TableHeader>
                 <TableBody>
                   {suppliers.map((supplier) => (
-                    <TableRow key={supplier.id}>
+                    <TableRow
+                      key={supplier.id}
+                      className="hover:bg-muted/50 cursor-pointer"
+                      onClick={() => router.push(`/providers/${supplier.id}`)}
+                    >
                       <TableCell>
                         <span className="font-medium truncate max-w-[280px] block">
                           {supplier.legalName}
@@ -243,7 +254,8 @@ export function SuppliersList(): React.JSX.Element {
               {suppliers.map((supplier) => (
                 <div
                   key={supplier.id}
-                  className="rounded-lg border bg-card p-4 shadow-sm"
+                  className="rounded-lg border bg-card p-4 shadow-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => router.push(`/providers/${supplier.id}`)}
                 >
                   <div className="flex flex-col gap-1">
                     <span className="font-medium">{supplier.legalName}</span>

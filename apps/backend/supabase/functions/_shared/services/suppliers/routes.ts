@@ -10,6 +10,10 @@ import {
   deleteSupplierHandler,
   listSuppliersHandler,
   listSuppliersByOrgHandler,
+  extractSupplierDocumentHandler,
+  createSupplierDocumentHandler,
+  listSupplierDocumentsHandler,
+  getSupplierDocumentPreviewUrlHandler,
 } from './http/index.ts';
 import { requireAuth } from '../../auth/middleware.ts';
 
@@ -32,5 +36,23 @@ export function registerSupplierRoutes(router: Router): void {
   router.delete(
     '/api/suppliers/:id',
     requireAuth(async (req) => deleteSupplierHandler(req)),
+  );
+  // Document extraction via AI
+  router.post(
+    '/api/suppliers/extract-from-document',
+    requireAuth(async (req) => extractSupplierDocumentHandler(req)),
+  );
+  // Supplier documents CRUD
+  router.post(
+    '/api/suppliers/:supplierId/documents',
+    requireAuth(async (req) => createSupplierDocumentHandler(req)),
+  );
+  router.get(
+    '/api/suppliers/:supplierId/documents',
+    requireAuth(async (req) => listSupplierDocumentsHandler(req)),
+  );
+  router.get(
+    '/api/suppliers/:supplierId/documents/:docId/preview-url',
+    requireAuth(async (req) => getSupplierDocumentPreviewUrlHandler(req)),
   );
 }

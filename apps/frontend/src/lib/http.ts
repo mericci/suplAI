@@ -64,6 +64,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export interface HttpClient {
   get: <T>(path: string, params?: Record<string, string>) => Promise<T>;
   post: <T>(path: string, body?: unknown) => Promise<T>;
+  postFormData: <T>(path: string, formData: FormData) => Promise<T>;
   put: <T>(path: string, body?: unknown) => Promise<T>;
   patch: <T>(path: string, body?: unknown) => Promise<T>;
   del: <T>(path: string) => Promise<T>;
@@ -87,7 +88,7 @@ export function createHttpClient(
     if (getAuthToken) {
       const token = await getAuthToken();
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers.Authorization = `Bearer ${token}`;
       }
     }
     return headers;
@@ -109,6 +110,19 @@ export function createHttpClient(
       method: 'POST',
       headers: await buildHeaders(),
       body: body ? JSON.stringify(body) : undefined,
+    });
+    return handleResponse<T>(res);
+  }
+
+  async function postFormData<T>(path: string, formData: FormData): Promise<T> {
+    // Build headers without Content-Type so the browser sets multipart boundary
+    const headers = await buildHeaders();
+    const headersRecord = headers as Record<string, string>;
+    delete headersRecord['Content-Type'];
+    const res = await fetch(buildUrl(baseUrl, path), {
+      method: 'POST',
+      headers: headersRecord,
+      body: formData,
     });
     return handleResponse<T>(res);
   }
@@ -140,6 +154,6 @@ export function createHttpClient(
   }
 
   return {
-    get, post, put, patch, del,
+    get, post, postFormData, put, patch, del,
   };
 }
