@@ -7,6 +7,7 @@ import {
   BuildingIcon,
   FileTextIcon,
   PlusIcon,
+  ReceiptIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,9 @@ import {
   listSupplierDocuments,
 } from '@/integrations/backend/suppliers';
 import type { Supplier, SupplierDocument } from '@/integrations/backend/suppliers';
+import { getMe } from '@/integrations/backend/users';
+import { getOrgInvoices } from '@/integrations/backend/sii/get-org-invoices';
+import type { Invoice } from '@supl/shared';
 import { CreateSupplierSheet } from './CreateSupplierSheet';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
 
@@ -38,6 +42,191 @@ function formatDate(iso: string): string {
     month: 'short',
     year: 'numeric',
   });
+}
+
+const STATUS_LABELS: Record<Invoice['status'], string> = {
+  pending: 'Pendiente',
+  approved: 'Aprobada',
+  paid: 'Pagada',
+  rejected: 'Rechazada',
+};
+
+const STATUS_BADGE_CLASS: Record<Invoice['status'], string> = {
+  pending: 'bg-amber-100 text-amber-800 border-amber-200',
+  approved: 'bg-green-100 text-green-800 border-green-200',
+  paid: 'bg-blue-100 text-blue-800 border-blue-200',
+  rejected: 'bg-red-100 text-red-800 border-red-200',
+};
+
+const STATUS_CARD_CLASS: Record<Invoice['status'], string> = {
+  pending: 'border-amber-200 bg-amber-50',
+  approved: 'border-green-200 bg-green-50',
+  paid: 'border-blue-200 bg-blue-50',
+  rejected: 'border-red-200 bg-red-50',
+};
+
+const STATUS_COUNT_CLASS: Record<Invoice['status'], string> = {
+  pending: 'text-amber-700',
+  approved: 'text-green-700',
+  paid: 'text-blue-700',
+  rejected: 'text-red-700',
+};
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  invoice: 'Factura',
+  credit_note: 'Nota de crédito',
+  debit_note: 'Nota de débito',
+  receipt: 'Boleta',
+};
+
+function docTypeLabel(type: string): string {
+  return DOC_TYPE_LABELS[type] ?? type;
+}
+
+function InvoiceStatusBadge({ status }: { status: Invoice['status'] }): React.JSX.Element {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[status]}`}
+    >
+      {STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+function InvoicesSection({
+  invoices,
+  invoiceTotal,
+  loading,
+}: {
+  invoices: Invoice[];
+  invoiceTotal: number;
+  loading: boolean;
+}): React.JSX.Element {
+  const statusOrder: Invoice['status'][] = ['pending', 'approved', 'paid', 'rejected'];
+
+  const statusCounts = invoices.reduce(
+    (acc, inv) => {
+      acc[inv.status] = (acc[inv.status] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <ReceiptIcon className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Facturas
+        </h2>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-lg border bg-muted" />
+            ))}
+          </div>
+          <div className="h-32 animate-pulse rounded-lg border bg-muted" />
+        </div>
+      ) : invoices.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-center">
+          <ReceiptIcon className="h-8 w-8 text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">No hay facturas registradas</p>
+        </div>
+      ) : (
+        <>
+          {/* Status summary cards */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {statusOrder.map((s) => {
+              const count = statusCounts[s] ?? 0;
+              if (s === 'rejected' && count === 0) return null;
+              return (
+                <div
+                  key={s}
+                  className={`rounded-lg border px-3 py-2.5 ${STATUS_CARD_CLASS[s]}`}
+                >
+                  <p className="text-xs text-muted-foreground">{STATUS_LABELS[s]}</p>
+                  <p className={`text-2xl font-bold tabular-nums ${STATUS_COUNT_CLASS[s]}`}>
+                    {count}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {invoiceTotal > 100 && (
+            <p className="text-xs text-muted-foreground">
+              Mostrando 100 de {invoiceTotal} facturas más recientes
+            </p>
+          )}
+
+          {/* Desktop table */}
+          <div className="hidden overflow-hidden rounded-lg border sm:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
+                    Documento
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
+                    Fecha emisión
+                  </th>
+                  <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">
+                    Monto bruto
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
+                    Estado
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {invoices.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 font-medium">
+                      {docTypeLabel(inv.documentType)} #{inv.documentNumber}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatDate(inv.issueDate)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {inv.grossAmount != null ? formatCLP(inv.grossAmount) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <InvoiceStatusBadge status={inv.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="space-y-2 sm:hidden">
+            {invoices.map((inv) => (
+              <div key={inv.id} className="rounded-lg border bg-card p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {docTypeLabel(inv.documentType)} #{inv.documentNumber}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{formatDate(inv.issueDate)}</p>
+                  </div>
+                  <InvoiceStatusBadge status={inv.status} />
+                </div>
+                {inv.grossAmount != null && (
+                  <p className="mt-1.5 text-sm font-semibold tabular-nums">
+                    {formatCLP(inv.grossAmount)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function ServiceCard({
@@ -131,16 +320,28 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceTotal, setInvoiceTotal] = useState(0);
+  const [invoicesLoading, setInvoicesLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async (): Promise<void> => {
       try {
         setLoading(true);
         setError(null);
+        setInvoicesLoading(true);
 
-        const [supplierRes, docsRes] = await Promise.all([
+        const [supplierRes, docsRes, invoicesRes] = await Promise.all([
           getSupplier(supplierId),
           listSupplierDocuments(supplierId),
+          (async () => {
+            const meRes = await getMe();
+            if (!meRes.success || !meRes.data) return null;
+            return getOrgInvoices(meRes.data.organization_id, {
+              supplierId,
+              limit: 100,
+            });
+          })(),
         ]);
 
         if (!supplierRes.success || !supplierRes.data) {
@@ -150,10 +351,16 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
 
         setSupplier(supplierRes.data);
         setDocuments(docsRes.success ? (docsRes.data ?? []) : []);
+
+        if (invoicesRes?.success && invoicesRes.data) {
+          setInvoices(invoicesRes.data.data);
+          setInvoiceTotal(invoicesRes.data.pagination.total);
+        }
       } catch {
         setError('Error al cargar el proveedor.');
       } finally {
         setLoading(false);
+        setInvoicesLoading(false);
       }
     };
 
@@ -246,30 +453,48 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
 
           <Separator />
 
+          {/* Invoices */}
+          <InvoicesSection
+            invoices={invoices}
+            invoiceTotal={invoiceTotal}
+            loading={invoicesLoading}
+          />
+
+          <Separator />
+
           {/* Documents / Services */}
-          {documents.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <FileTextIcon className="h-10 w-10 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-muted-foreground">
-                No hay documentos registrados para este proveedor
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Haz clic en &quot;Agregar documento&quot; para subir
-                {' '}contratos, boletas o cotizaciones.
-              </p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <FileTextIcon className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Servicios
+              </h2>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {documents.map((doc, idx) => (
-                <ServiceCard
-                  key={doc.id}
-                  doc={doc}
-                  index={idx}
-                  supplierId={supplierId}
-                />
-              ))}
-            </div>
-          )}
+
+            {documents.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <FileTextIcon className="h-10 w-10 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-muted-foreground">
+                  No hay documentos registrados para este proveedor
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Haz clic en &quot;Agregar documento&quot; para subir
+                  {' '}contratos, boletas o cotizaciones.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {documents.map((doc, idx) => (
+                  <ServiceCard
+                    key={doc.id}
+                    doc={doc}
+                    index={idx}
+                    supplierId={supplierId}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
