@@ -82,7 +82,7 @@ export function CreateSupplierSheet({
   trigger,
 }: CreateSupplierSheetProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>(presetSupplierId ? 'form' : 'upload');
+  const [step, setStep] = useState<Step>('upload');
   const [status, setStatus] = useState<Status>('idle');
   const [apiError, setApiError] = useState<string | null>(null);
   const [fileUploadWarning, setFileUploadWarning] = useState<string | null>(null);
@@ -325,7 +325,7 @@ export function CreateSupplierSheet({
   }
 
   function handleReset(): void {
-    setStep(presetSupplierId ? 'form' : 'upload');
+    setStep('upload');
     setFields({
       legalName: '', taxIdentifier: '', serviceDescription: '', serviceCategory: '', tariffType: '', tariffDetail: '', amounts: [],
     });
