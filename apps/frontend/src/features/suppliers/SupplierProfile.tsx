@@ -335,7 +335,7 @@ function CostContractSection({
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Tipo</th>
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Fecha</th>
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Estado</th>
-              <th className="px-4 py-2.5 text-right font-medium text-muted-foreground text-xs"></th>
+              <th className="w-10 px-4 py-2.5 text-right font-medium text-muted-foreground text-xs"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -365,16 +365,20 @@ function CostContractSection({
                   }
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <DocumentPreviewSheet
-                    supplierId={supplierId}
-                    docId={doc.id}
-                    fileName={doc.fileName}
-                    trigger={
-                      <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
-                        <DownloadIcon className="h-4 w-4" />
-                      </button>
-                    }
-                  />
+                  {doc.storagePath ? (
+                    <DocumentPreviewSheet
+                      supplierId={supplierId}
+                      docId={doc.id}
+                      fileName={doc.fileName}
+                      trigger={
+                        <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
+                          <DownloadIcon className="h-4 w-4" />
+                        </button>
+                      }
+                    />
+                  ) : (
+                    <span className="text-muted-foreground/40">—</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -411,7 +415,7 @@ function AdditionalDocsSection({
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Documento</th>
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Tipo</th>
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Fecha</th>
-              <th className="px-4 py-2.5 text-right font-medium text-muted-foreground text-xs"></th>
+              <th className="w-10 px-4 py-2.5 text-right font-medium text-muted-foreground text-xs"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -430,16 +434,20 @@ function AdditionalDocsSection({
                   {formatDate(doc.createdAt)}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <DocumentPreviewSheet
-                    supplierId={supplierId}
-                    docId={doc.id}
-                    fileName={doc.fileName}
-                    trigger={
-                      <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
-                        <DownloadIcon className="h-4 w-4" />
-                      </button>
-                    }
-                  />
+                  {doc.storagePath ? (
+                    <DocumentPreviewSheet
+                      supplierId={supplierId}
+                      docId={doc.id}
+                      fileName={doc.fileName}
+                      trigger={
+                        <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
+                          <DownloadIcon className="h-4 w-4" />
+                        </button>
+                      }
+                    />
+                  ) : (
+                    <span className="text-muted-foreground/40">—</span>
+                  )}
                 </td>
               </tr>
             ))}
