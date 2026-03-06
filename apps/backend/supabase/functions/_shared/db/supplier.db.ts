@@ -113,7 +113,7 @@ export async function findByOrganization(
   search?: string,
 ): Promise<{ suppliers: SupplierWithAmounts[]; total: number }> {
   // Step 1: Fetch supplier IDs linked to this org from the junction table
-  const { data: junctionRows, error: junctionError } = await (supabase as any)
+  const { data: junctionRows, error: junctionError } = await supabaseAdmin()
     .from('organization_suppliers')
     .select('supplier_id')
     .eq('organization_id', organizationId);
