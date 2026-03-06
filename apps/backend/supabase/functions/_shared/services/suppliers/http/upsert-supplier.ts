@@ -23,14 +23,17 @@ export async function upsertSupplierHandler(
 
     const supplier = await upsertSupplier(body);
 
-    // Link supplier to the requesting user's organization
-    // Use admin client to bypass RLS (anon key has no auth.uid() in Edge context)
-    const { data: userData } = await supabaseAdmin()
-      .from('users')
-      .select('organization_id')
-      .eq('id', context.userId)
-      .is('deleted_at', null)
-      .single();
+    // Link supplier to the requesting user's organization.
+    // Look up by email because users.id is gen_random_uuid(), not the Supabase Auth UID.
+    // Use admin client to bypass RLS (anon key has no auth.uid() in Edge context).
+    const { data: userData } = context.email
+      ? await supabaseAdmin()
+          .from('users')
+          .select('organization_id')
+          .eq('email', context.email)
+          .is('deleted_at', null)
+          .single()
+      : { data: null };
     if (userData?.organization_id) {
       await upsertOrgSupplier(userData.organization_id, supplier.id);
     }
