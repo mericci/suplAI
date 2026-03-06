@@ -28,6 +28,7 @@ export const UpsertSupplierSchema = CreateSupplierSchema;
 
 export const SupplierListFiltersSchema = z.object({
   search: z.string().optional(),
+  taxIdentifier: z.string().optional(),
   page: z.number().int().positive().default(1),
   limit: z.number().int().positive().max(100)
     .default(10),

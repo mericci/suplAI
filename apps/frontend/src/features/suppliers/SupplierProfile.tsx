@@ -5,11 +5,16 @@ import Link from 'next/link';
 import {
   ArrowLeftIcon,
   BuildingIcon,
+  CheckCircle2Icon,
+  ClockIcon,
+  DownloadIcon,
   FileTextIcon,
+  FolderOpenIcon,
   LayersIcon,
   PlusIcon,
   ReceiptIcon,
 } from 'lucide-react';
+import type { Invoice } from '@supl/shared';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -21,7 +26,6 @@ import {
 import type { Supplier, SupplierDocument } from '@/integrations/backend/suppliers';
 import { getMe } from '@/integrations/backend/users';
 import { getOrgInvoices } from '@/integrations/backend/sii/get-org-invoices';
-import type { Invoice } from '@supl/shared';
 import { CreateSupplierSheet } from './CreateSupplierSheet';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
 
@@ -99,7 +103,10 @@ function docTypeLabel(type: string): string {
 function InvoiceStatusBadge({ status }: { status: Invoice['status'] }): React.JSX.Element {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[status]}`}
+      className={[
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+        STATUS_BADGE_CLASS[status],
+      ].join(' ')}
     >
       {STATUS_LABELS[status]}
     </span>
@@ -134,7 +141,7 @@ function InvoicesSection({
         </h2>
       </div>
 
-      {loading ? (
+      {loading && (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[...Array(4)].map((_, i) => (
@@ -143,12 +150,14 @@ function InvoicesSection({
           </div>
           <div className="h-32 animate-pulse rounded-lg border bg-muted" />
         </div>
-      ) : invoices.length === 0 ? (
+      )}
+      {!loading && invoices.length === 0 && (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-10 text-center">
           <ReceiptIcon className="h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">No hay facturas registradas</p>
         </div>
-      ) : (
+      )}
+      {!loading && invoices.length > 0 && (
         <>
           {/* Status summary cards */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -242,100 +251,200 @@ function InvoicesSection({
   );
 }
 
-function ServiceCard({
-  doc,
-  index,
+function CostContractSection({
+  docs,
   supplierId,
 }: {
-  doc: SupplierDocument;
-  index: number;
+  docs: SupplierDocument[];
+  supplierId: string;
+}): React.JSX.Element {
+  const currentDoc = docs.find((d) => d.isCurrent) ?? docs[docs.length - 1];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <FileTextIcon className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Historial de respaldos
+        </h2>
+        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {docs.length} {docs.length === 1 ? 'versión' : 'versiones'}
+        </span>
+      </div>
+
+      {/* Current cost structure info */}
+      {currentDoc && (currentDoc.tariffType || currentDoc.amounts.length > 0) && (
+        <div className="rounded-xl border bg-card p-4 space-y-4">
+          {(currentDoc.tariffType || currentDoc.amounts.length > 0) && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {currentDoc.tariffType && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Estructura tarifaria
+                  </p>
+                  <Badge variant="outline" className="text-xs">{currentDoc.tariffType}</Badge>
+                  {currentDoc.tariffDetail && (
+                    <p className="mt-2 text-xs text-muted-foreground">{currentDoc.tariffDetail}</p>
+                  )}
+                </div>
+              )}
+
+              {currentDoc.amounts.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <LayersIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Tabla de Tramos
+                    </p>
+                  </div>
+                  <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">Tramo</th>
+                          <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">
+                            Cobro por unidad ({currentDoc.amounts[0].currency})
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {currentDoc.amounts.map((a, i) => (
+                          <tr key={i}>
+                            <td className="px-3 py-2.5 text-muted-foreground">{a.concept}</td>
+                            <td className="px-3 py-2.5 text-right font-medium tabular-nums">
+                              {formatAmountByCurrency(a.amount, a.currency)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Document list */}
+      <div className="overflow-hidden rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Documento</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Tipo</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Fecha</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Estado</th>
+              <th className="px-4 py-2.5 text-right font-medium text-muted-foreground text-xs"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {[...docs].reverse().map((doc) => (
+              <tr key={doc.id} className={doc.isCurrent ? 'bg-blue-50/50' : ''}>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {doc.isCurrent
+                      ? <CheckCircle2Icon className="h-4 w-4 shrink-0 text-green-500" />
+                      : <ClockIcon className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+                    }
+                    <span className="truncate max-w-[160px] sm:max-w-none font-medium text-sm">
+                      {doc.fileName}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                  {doc.documentType ?? '—'}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                  {formatDate(doc.createdAt)}
+                </td>
+                <td className="px-4 py-3">
+                  {doc.isCurrent
+                    ? <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Vigente</span>
+                    : <span className="text-xs text-muted-foreground">Archivado</span>
+                  }
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <DocumentPreviewSheet
+                    supplierId={supplierId}
+                    docId={doc.id}
+                    fileName={doc.fileName}
+                    trigger={
+                      <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
+                        <DownloadIcon className="h-4 w-4" />
+                      </button>
+                    }
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdditionalDocsSection({
+  docs,
+  supplierId,
+}: {
+  docs: SupplierDocument[];
   supplierId: string;
 }): React.JSX.Element {
   return (
-    <div className="rounded-xl border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <span className="text-sm font-semibold">Servicio {index + 1}</span>
-        {doc.serviceCategory && (
-          <Badge variant="secondary">{doc.serviceCategory}</Badge>
-        )}
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <FolderOpenIcon className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Documentos adicionales
+        </h2>
+        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {docs.length}
+        </span>
       </div>
 
-      <div className="p-4 space-y-4">
-        {doc.serviceDescription && (
-          <p className="text-sm text-muted-foreground">{doc.serviceDescription}</p>
-        )}
-
-        {/* Tariff + Amounts */}
-        {(doc.tariffType || doc.amounts.length > 0) && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {doc.tariffType && (
-              <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Estructura tarifaria
-                </p>
-                <Badge variant="outline" className="text-xs">{doc.tariffType}</Badge>
-                {doc.tariffDetail && (
-                  <p className="mt-2 text-xs text-muted-foreground">{doc.tariffDetail}</p>
-                )}
-              </div>
-            )}
-
-            {doc.amounts.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <LayersIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Tabla de Tramos
-                  </p>
-                </div>
-                <div className="overflow-hidden rounded-lg border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">Tramo</th>
-                        <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">
-                          Cobro por unidad ({doc.amounts[0].currency})
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {doc.amounts.map((a, i) => (
-                        <tr key={i}>
-                          <td className="px-3 py-2.5 text-muted-foreground">{a.concept}</td>
-                          <td className="px-3 py-2.5 text-right font-medium tabular-nums">
-                            {formatAmountByCurrency(a.amount, a.currency)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Document */}
-        <div className="border-t pt-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Documento de respaldo
-          </p>
-          <div className="flex items-center gap-2">
-            <FileTextIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{doc.fileName}</p>
-              <p className="text-xs text-muted-foreground">
-                {doc.documentType ? `${doc.documentType} · ` : ''}
-                {formatDate(doc.createdAt)}
-              </p>
-            </div>
-            <DocumentPreviewSheet
-              supplierId={supplierId}
-              docId={doc.id}
-              fileName={doc.fileName}
-            />
-          </div>
-        </div>
+      <div className="overflow-hidden rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Documento</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Tipo</th>
+              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Fecha</th>
+              <th className="px-4 py-2.5 text-right font-medium text-muted-foreground text-xs"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {[...docs].reverse().map((doc) => (
+              <tr key={doc.id} className="hover:bg-muted/20">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <FileTextIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate max-w-[160px] sm:max-w-none font-medium">{doc.fileName}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                  {doc.documentType ?? '—'}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                  {formatDate(doc.createdAt)}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <DocumentPreviewSheet
+                    supplierId={supplierId}
+                    docId={doc.id}
+                    fileName={doc.fileName}
+                    trigger={
+                      <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
+                        <DownloadIcon className="h-4 w-4" />
+                      </button>
+                    }
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -460,14 +569,15 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
                 <p className="text-sm text-muted-foreground">RUT: {supplier.taxIdentifier}</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {documents.length === 0
-                    ? 'Sin servicios asociados'
-                    : `${documents.length} ${documents.length === 1 ? 'servicio asociado' : 'servicios asociados'}`}
+                    ? 'Sin documentos asociados'
+                    : `${documents.length} ${documents.length === 1 ? 'documento asociado' : 'documentos asociados'}`}
                 </p>
               </div>
             </div>
 
             <CreateSupplierSheet
               supplierId={supplierId}
+              supplier={supplier}
               onSuccess={handleDocumentAdded}
               trigger={
                 <Button size="sm">
@@ -489,39 +599,39 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
 
           <Separator />
 
-          {/* Documents / Services */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Servicios
-              </h2>
+          {/* Documents */}
+          {documents.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
+              <FileTextIcon className="h-10 w-10 text-muted-foreground/40" />
+              <p className="text-sm font-medium text-muted-foreground">
+                No hay documentos registrados para este proveedor
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Haz clic en &quot;Agregar documento&quot; para subir
+                {' '}contratos, boletas o cotizaciones.
+              </p>
             </div>
-
-            {documents.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-16 text-center">
-                <FileTextIcon className="h-10 w-10 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-muted-foreground">
-                  No hay documentos registrados para este proveedor
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Haz clic en &quot;Agregar documento&quot; para subir
-                  {' '}contratos, boletas o cotizaciones.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {documents.map((doc, idx) => (
-                  <ServiceCard
-                    key={doc.id}
-                    doc={doc}
-                    index={idx}
-                    supplierId={supplierId}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          ) : (
+            <div className="space-y-8">
+              {(() => {
+                const costDocs = documents.filter((d) => d.documentRole === 'cost_contract');
+                const additionalDocs = documents.filter((d) => d.documentRole === 'additional');
+                return (
+                  <>
+                    {costDocs.length > 0 && (
+                      <CostContractSection docs={costDocs} supplierId={supplierId} />
+                    )}
+                    {additionalDocs.length > 0 && (
+                      <>
+                        {costDocs.length > 0 && <Separator />}
+                        <AdditionalDocsSection docs={additionalDocs} supplierId={supplierId} />
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </div>
       </div>
     </div>

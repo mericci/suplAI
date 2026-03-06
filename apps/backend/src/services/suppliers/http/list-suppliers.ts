@@ -11,6 +11,7 @@ export async function listSuppliersHandler(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const filters = {
       search: url.searchParams.get('search') ?? undefined,
+      taxIdentifier: url.searchParams.get('taxIdentifier') ?? undefined,
       page: url.searchParams.has('page')
         ? Number(url.searchParams.get('page'))
         : undefined,

@@ -1,4 +1,6 @@
 export { getSupplier } from './get-supplier';
+export { listSuppliers } from './list-suppliers';
+export type { ListSuppliersParams } from './list-suppliers';
 export { listSuppliersByOrg } from './list-suppliers-by-org';
 export type { ListSuppliersByOrgParams } from './list-suppliers-by-org';
 export { upsertSupplier } from './upsert-supplier';
