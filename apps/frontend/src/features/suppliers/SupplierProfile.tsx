@@ -6,6 +6,7 @@ import {
   ArrowLeftIcon,
   BuildingIcon,
   FileTextIcon,
+  LayersIcon,
   PlusIcon,
   ReceiptIcon,
 } from 'lucide-react';
@@ -34,6 +35,18 @@ function formatCLP(amount: number): string {
     currency: 'CLP',
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function formatUF(amount: number): string {
+  return amount.toLocaleString('es-CL', {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+}
+
+function formatAmountByCurrency(amount: number, currency: string): string {
+  if (currency === 'CLP') return formatCLP(amount);
+  return `${formatUF(amount)} ${currency}`;
 }
 
 function formatDate(iso: string): string {
@@ -269,19 +282,33 @@ function ServiceCard({
 
             {doc.amounts.length > 0 && (
               <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Montos
-                </p>
-                <div className="space-y-1">
-                  {doc.amounts.map((a, i) => (
-                    <div key={i} className="flex items-baseline justify-between gap-2 text-sm">
-                      <span className="text-muted-foreground">{a.concept}</span>
-                      <span className="shrink-0 font-medium tabular-nums">
-                        {formatCLP(a.amount)}
-                        {a.currency !== 'CLP' && ` ${a.currency}`}
-                      </span>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-1.5 mb-2">
+                  <LayersIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Tabla de Tramos
+                  </p>
+                </div>
+                <div className="overflow-hidden rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground text-xs">Tramo</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted-foreground text-xs">
+                          Cobro por unidad ({doc.amounts[0].currency})
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {doc.amounts.map((a, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-2.5 text-muted-foreground">{a.concept}</td>
+                          <td className="px-3 py-2.5 text-right font-medium tabular-nums">
+                            {formatAmountByCurrency(a.amount, a.currency)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
