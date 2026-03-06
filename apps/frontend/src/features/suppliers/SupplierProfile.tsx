@@ -365,20 +365,16 @@ function CostContractSection({
                   }
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {doc.storagePath ? (
-                    <DocumentPreviewSheet
-                      supplierId={supplierId}
-                      docId={doc.id}
-                      fileName={doc.fileName}
-                      trigger={
-                        <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
-                          <DownloadIcon className="h-4 w-4" />
-                        </button>
-                      }
-                    />
-                  ) : (
-                    <span className="text-muted-foreground/40">—</span>
-                  )}
+                  <DocumentPreviewSheet
+                    supplierId={supplierId}
+                    docId={doc.id}
+                    fileName={doc.fileName}
+                    trigger={
+                      <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
+                        <DownloadIcon className="h-4 w-4" />
+                      </button>
+                    }
+                  />
                 </td>
               </tr>
             ))}
@@ -434,20 +430,16 @@ function AdditionalDocsSection({
                   {formatDate(doc.createdAt)}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {doc.storagePath ? (
-                    <DocumentPreviewSheet
-                      supplierId={supplierId}
-                      docId={doc.id}
-                      fileName={doc.fileName}
-                      trigger={
-                        <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
-                          <DownloadIcon className="h-4 w-4" />
-                        </button>
-                      }
-                    />
-                  ) : (
-                    <span className="text-muted-foreground/40">—</span>
-                  )}
+                  <DocumentPreviewSheet
+                    supplierId={supplierId}
+                    docId={doc.id}
+                    fileName={doc.fileName}
+                    trigger={
+                      <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Ver documento">
+                        <DownloadIcon className="h-4 w-4" />
+                      </button>
+                    }
+                  />
                 </td>
               </tr>
             ))}
