@@ -46,8 +46,13 @@ export async function extractSupplierDocument(
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
-  // Convert Uint8Array to base64 in Deno
-  const base64Data = btoa(String.fromCharCode(...fileBytes));
+  // Convert Uint8Array to base64 in Deno (chunked to avoid stack overflow on large files)
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < fileBytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...fileBytes.subarray(i, i + chunkSize));
+  }
+  const base64Data = btoa(binary);
 
   let contentBlock: Record<string, unknown>;
   if (mimeType === 'application/pdf') {
