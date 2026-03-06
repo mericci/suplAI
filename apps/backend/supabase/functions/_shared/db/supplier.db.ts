@@ -200,12 +200,13 @@ export async function findByOrganization(
 }
 
 /**
- * List active suppliers with optional search and pagination.
+ * List active suppliers with optional search, exact taxIdentifier filter, and pagination.
  */
 export async function findAll(
   limit: number,
   offset: number,
   search?: string,
+  taxIdentifier?: string,
 ): Promise<{ suppliers: Supplier[]; total: number }> {
   let countQuery = supabase
     .from('suppliers')
@@ -214,7 +215,10 @@ export async function findAll(
 
   let dataQuery = supabase.from('suppliers').select('*').is('deleted_at', null);
 
-  if (search) {
+  if (taxIdentifier) {
+    countQuery = countQuery.eq('tax_identifier', taxIdentifier);
+    dataQuery = dataQuery.eq('tax_identifier', taxIdentifier);
+  } else if (search) {
     const pattern = `%${search}%`;
     countQuery = countQuery.or(
       `legal_name.ilike.${pattern},tax_identifier.ilike.${pattern}`,

@@ -21,6 +21,7 @@ export async function listSuppliers(
       validated.limit,
       offset,
       validated.search,
+      validated.taxIdentifier,
     );
 
     return {

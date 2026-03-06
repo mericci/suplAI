@@ -55,6 +55,8 @@ export function toPublicDocument(doc: SupplierDocumentRow): SupplierDocument {
     tariffType: doc.tariff_type,
     tariffDetail: doc.tariff_detail,
     amounts: doc.amounts,
+    documentRole: doc.document_role,
+    isCurrent: doc.is_current,
     createdAt: doc.created_at,
     updatedAt: doc.updated_at,
     deletedAt: doc.deleted_at,

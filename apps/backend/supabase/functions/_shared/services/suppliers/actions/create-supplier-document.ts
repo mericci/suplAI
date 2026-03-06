@@ -14,6 +14,13 @@ export async function createSupplierDocument(data: unknown): Promise<SupplierDoc
       fileName: validated.fileName,
     });
 
+    const isCostDoc = !!(validated.tariffType || (validated.amounts && validated.amounts.length > 0));
+    const documentRole = isCostDoc ? 'cost_contract' : 'additional';
+
+    if (isCostDoc) {
+      await supplierDocumentDb.demoteCurrentDocuments(validated.supplierId);
+    }
+
     const doc = await supplierDocumentDb.create({
       supplier_id: validated.supplierId,
       file_name: validated.fileName,
@@ -25,6 +32,8 @@ export async function createSupplierDocument(data: unknown): Promise<SupplierDoc
       tariff_type: validated.tariffType,
       tariff_detail: validated.tariffDetail,
       amounts: (validated.amounts ?? []) as SupplierDocumentAmount[],
+      document_role: documentRole,
+      is_current: isCostDoc,
     });
 
     logger.info('Supplier document created', { docId: doc.id });

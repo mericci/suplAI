@@ -15,6 +15,7 @@ interface DocumentPreviewSheetProps {
   supplierId: string;
   docId: string;
   fileName: string;
+  trigger?: React.ReactNode;
 }
 
 function isImageFile(fileName: string): boolean {
@@ -26,6 +27,7 @@ export function DocumentPreviewSheet({
   supplierId,
   docId,
   fileName,
+  trigger,
 }: DocumentPreviewSheetProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,15 +58,19 @@ export function DocumentPreviewSheet({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 shrink-0"
-        onClick={handleOpen}
-        aria-label="Ver documento"
-      >
-        <EyeIcon className="h-4 w-4" />
-      </Button>
+      {trigger ? (
+        <div onClick={handleOpen} className="cursor-pointer">{trigger}</div>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          onClick={handleOpen}
+          aria-label="Ver documento"
+        >
+          <EyeIcon className="h-4 w-4" />
+        </Button>
+      )}
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-2xl">
