@@ -32,7 +32,7 @@ export async function getSupplierDocumentPreviewUrlHandler(req: Request): Promis
     return successResponse(result);
   } catch (error) {
     const msg = getErrorMessage(error);
-    if (msg.includes('not found')) return notFoundResponse('Document');
+    if (msg === 'Document not found') return notFoundResponse('Document');
     return serverError(msg);
   }
 }

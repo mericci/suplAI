@@ -328,26 +328,26 @@ function CostContractSection({
 
       {/* Document list */}
       <div className="overflow-hidden rounded-lg border">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Documento</th>
-              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Tipo</th>
-              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Fecha</th>
-              <th className="px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Estado</th>
-              <th className="w-10 px-4 py-2.5 text-right font-medium text-muted-foreground text-xs"></th>
+              <th className="w-20 px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Tipo</th>
+              <th className="w-28 px-4 py-2.5 text-left font-medium text-muted-foreground text-xs hidden sm:table-cell">Fecha</th>
+              <th className="w-28 px-4 py-2.5 text-left font-medium text-muted-foreground text-xs">Estado</th>
+              <th className="w-10 py-2.5 pr-4"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {[...docs].reverse().map((doc) => (
               <tr key={doc.id} className={doc.isCurrent ? 'bg-blue-50/50' : ''}>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
+                <td className="max-w-0 px-4 py-3">
+                  <div className="flex items-center gap-2 overflow-hidden">
                     {doc.isCurrent
                       ? <CheckCircle2Icon className="h-4 w-4 shrink-0 text-green-500" />
                       : <ClockIcon className="h-4 w-4 shrink-0 text-muted-foreground/50" />
                     }
-                    <span className="truncate max-w-[160px] sm:max-w-none font-medium text-sm">
+                    <span className="truncate font-medium text-sm">
                       {doc.fileName}
                     </span>
                   </div>
@@ -364,7 +364,7 @@ function CostContractSection({
                     : <span className="text-xs text-muted-foreground">Archivado</span>
                   }
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="py-3 pr-4 text-right">
                   <DocumentPreviewSheet
                     supplierId={supplierId}
                     docId={doc.id}
