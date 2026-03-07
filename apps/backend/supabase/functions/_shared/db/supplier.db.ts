@@ -6,7 +6,7 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabase, supabaseAdmin } from '../lib/supabase.ts';
 import type { Database } from '../types/supabase.ts';
 
 type Supplier = Database['public']['Tables']['suppliers']['Row'];
