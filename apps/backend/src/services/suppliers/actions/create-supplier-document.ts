@@ -20,8 +20,8 @@ export async function createSupplierDocument(data: unknown): Promise<SupplierDoc
       fileName: validated.fileName,
     });
 
-    const isCostDoc = !!(validated.tariffType || (validated.amounts && validated.amounts.length > 0));
-    const documentRole = isCostDoc ? 'cost_contract' : 'additional';
+    const documentRole = validated.documentRole ?? 'cost_contract';
+    const isCostDoc = documentRole === 'cost_contract';
 
     if (isCostDoc) {
       await supplierDocumentDb.demoteCurrentDocuments(validated.supplierId);

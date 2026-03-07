@@ -114,6 +114,7 @@ export function CreateSupplierSheet({
     amounts: [],
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [documentRole, setDocumentRole] = useState<'cost_contract' | 'additional'>('cost_contract');
 
   function setField<K extends keyof FormFields>(key: K, value: FormFields[K]): void {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -161,6 +162,8 @@ export function CreateSupplierSheet({
   }
 
   function applyExtracted(data: ExtractedDocumentData): void {
+    const inferredRole = (data.tariffType || data.amounts.length > 0) ? 'cost_contract' : 'additional';
+    setDocumentRole(inferredRole);
     setFields((prev) => ({
       ...prev,
       legalName: data.supplierName ?? prev.legalName,
@@ -300,6 +303,7 @@ export function CreateSupplierSheet({
           fileName: selectedFile!.name,
           storagePath,
           documentType: null,
+          documentRole,
           serviceCategory: fields.serviceCategory || null,
           serviceDescription: fields.serviceDescription || null,
           tariffType: fields.tariffType || null,
@@ -327,6 +331,7 @@ export function CreateSupplierSheet({
 
   function handleReset(): void {
     setStep('upload');
+    setDocumentRole('cost_contract');
     setFields({
       legalName: '', taxIdentifier: '', serviceDescription: '', serviceCategory: '', tariffType: '', tariffDetail: '', amounts: [],
     });
@@ -559,6 +564,41 @@ export function CreateSupplierSheet({
                 </div>
               )}
 
+              {/* Document type selector (only shown when adding to existing supplier) */}
+              {presetSupplierId && (
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Tipo de documento
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDocumentRole('cost_contract')}
+                      className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                        documentRole === 'cost_contract'
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                      disabled={isLoading}
+                    >
+                      Contrato de costo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDocumentRole('additional')}
+                      className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                        documentRole === 'additional'
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                      disabled={isLoading}
+                    >
+                      Documento adicional
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Supplier section (hidden if pre-scoped) */}
               {!presetSupplierId && (
                 <div>
@@ -607,8 +647,8 @@ export function CreateSupplierSheet({
                 </div>
               )}
 
-              {/* Service section */}
-              <div>
+              {/* Service section (cost contracts only) */}
+              {documentRole === 'cost_contract' && <div>
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Servicio (opcional)
                 </p>
@@ -669,10 +709,10 @@ export function CreateSupplierSheet({
                     />
                   </div>
                 </div>
-              </div>
+              </div>}
 
-              {/* Amounts section */}
-              <div>
+              {/* Amounts section (cost contracts only) */}
+              {documentRole === 'cost_contract' && <div>
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Montos (opcional)
                 </p>
@@ -756,7 +796,7 @@ export function CreateSupplierSheet({
                     Agregar monto
                   </Button>
                 </div>
-              </div>
+              </div>}
 
               {/* Uploaded file summary */}
               {selectedFile && (
