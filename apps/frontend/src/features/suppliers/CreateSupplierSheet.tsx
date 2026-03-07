@@ -14,6 +14,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
 } from '@/components/ui/sheet';
 import {
   upsertSupplier,
@@ -294,7 +295,7 @@ export function CreateSupplierSheet({
       const hasServiceData = fields.serviceDescription || fields.serviceCategory
         || fields.tariffType || fields.tariffDetail || fields.amounts.length > 0;
 
-      if (storagePath && supplierId && (hasServiceData || storagePath)) {
+      if (storagePath && supplierId) {
         const docRes = await createSupplierDocument(supplierId, {
           fileName: selectedFile!.name,
           storagePath,
@@ -352,14 +353,14 @@ export function CreateSupplierSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      {trigger ? (
-        <div onClick={() => setOpen(true)} className="cursor-pointer">{trigger}</div>
-      ) : (
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <PlusIcon className="h-4 w-4" />
-          Nuevo proveedor
-        </Button>
-      )}
+      <SheetTrigger asChild>
+        {trigger ?? (
+          <Button size="sm">
+            <PlusIcon className="h-4 w-4" />
+            Nuevo proveedor
+          </Button>
+        )}
+      </SheetTrigger>
 
       <SheetContent side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-lg">
         <SheetHeader className="border-b px-4 py-4">
