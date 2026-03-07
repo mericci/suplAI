@@ -234,6 +234,7 @@ npm run type-check   # tsc --noEmit
 - IMPORTANT: Never commit API keys. Use `.env.local`, reference via `process.env`
 - YOU MUST run `npm run type-check` before committing. TypeScript errors break the build.
 - YOU MUST run `npm run lint` before committing.
+- Never use hardcoded values, for example if you manage status or business logic variables, use it from constants. Example: status = {failed: 'failed', successful: 'successful'} in the code import it and use as status.failed
 
 ### Structure
 
