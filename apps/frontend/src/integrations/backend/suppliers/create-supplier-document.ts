@@ -11,6 +11,7 @@ export interface CreateSupplierDocumentPayload {
   tariffType?: string | null;
   tariffDetail?: string | null;
   amounts?: Array<{ amount: number; currency: string; concept: string; frequency: string }>;
+  documentRole?: 'cost_contract' | 'additional';
 }
 
 export async function createSupplierDocument(
