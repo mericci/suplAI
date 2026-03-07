@@ -23,7 +23,11 @@ export async function createSupplierDocument(data: unknown): Promise<SupplierDoc
     const documentRole = validated.documentRole ?? 'cost_contract';
     const isCostDoc = documentRole === 'cost_contract';
 
-    const doc = await supplierDocumentDb.createAtomic({
+    if (isCostDoc) {
+      await supplierDocumentDb.demoteCurrentDocuments(validated.supplierId);
+    }
+
+    const doc = await supplierDocumentDb.create({
       supplier_id: validated.supplierId,
       file_name: validated.fileName,
       storage_path: validated.storagePath,
