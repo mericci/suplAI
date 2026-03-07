@@ -97,6 +97,7 @@ npm run test          # run all tests
 - Commits: conventional (`feat:`, `fix:`, `chore:`, `docs:`)
 - PR required for main, 1 review minimum
 - Vercel and supabase preview deploys on every PR (for frontend and backend)
+- When you start working on a new feature or issue, before you begin, always make sure to switch back to the main branch and run git pull.
 - **Before creating a new branch from main**: always run `git pull origin main` first to ensure you branch from an up-to-date base
 - **Before opening a PR to main**: `git checkout main && git pull origin main`, switch back to your branch, run `git merge origin/main`, review and resolve any conflicts before pushing
 

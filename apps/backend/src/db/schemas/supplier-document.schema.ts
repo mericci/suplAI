@@ -18,6 +18,8 @@ export const CreateSupplierDocumentSchema = z.object({
   tariffType: z.string().nullable().optional(),
   tariffDetail: z.string().nullable().optional(),
   amounts: z.array(SupplierDocumentAmountSchema).optional(),
+  documentRole: z.enum(['cost_contract', 'additional']).optional(),
+  isCurrent: z.boolean().optional(),
 });
 
 export type CreateSupplierDocumentInput = z.infer<typeof CreateSupplierDocumentSchema>;

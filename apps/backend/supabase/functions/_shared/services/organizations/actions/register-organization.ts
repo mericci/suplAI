@@ -142,6 +142,7 @@ export async function registerOrganization(
     // 6. Create the user record linked to the new organization
     if (validated.adminUser && authResult) {
       await userDb.create({
+        id: authResult.user.id,  // Store the Supabase Auth UID as the user's id
         organization_id: org.id,
         email: validated.adminUser.email,
         role: 'admin',

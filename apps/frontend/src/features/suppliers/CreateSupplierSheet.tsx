@@ -14,9 +14,15 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
 } from '@/components/ui/sheet';
-import { upsertSupplier, extractSupplierDocument, createSupplierDocument } from '@/integrations/backend/suppliers';
-import type { ExtractedDocumentData } from '@/integrations/backend/suppliers';
+import {
+  upsertSupplier,
+  extractSupplierDocument,
+  createSupplierDocument,
+  listSuppliers,
+} from '@/integrations/backend/suppliers';
+import type { ExtractedDocumentData, Supplier } from '@/integrations/backend/suppliers';
 import { createClient } from '@/lib/supabase/client';
 
 type Status = 'idle' | 'extracting' | 'loading' | 'success' | 'error';
@@ -48,6 +54,8 @@ export interface CreateSupplierSheetProps {
   onSuccess?: () => void;
   /** If provided, the sheet will be pre-scoped to this supplier (skip upsert, add doc only) */
   supplierId?: string;
+  /** Supplier data used for RUT mismatch check when supplierId is set */
+  supplier?: Supplier;
   /** Trigger element override — if not provided, renders the default "Nuevo proveedor" button */
   trigger?: React.ReactNode;
 }
@@ -71,13 +79,23 @@ function emptyAmount(): Amount {
 export function CreateSupplierSheet({
   onSuccess,
   supplierId: presetSupplierId,
+  supplier: presetSupplier,
   trigger,
 }: CreateSupplierSheetProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>(presetSupplierId ? 'form' : 'upload');
+  const [step, setStep] = useState<Step>('upload');
   const [status, setStatus] = useState<Status>('idle');
   const [apiError, setApiError] = useState<string | null>(null);
   const [fileUploadWarning, setFileUploadWarning] = useState<string | null>(null);
+
+  // RUT mismatch warning state
+  const [rutMismatch, setRutMismatch] = useState<{
+    extracted: string;
+    supplier: string;
+  } | null>(null);
+
+  // Duplicate RUT check state
+  const [duplicateSupplier, setDuplicateSupplier] = useState<Supplier | null>(null);
 
   // File state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -166,12 +184,26 @@ export function CreateSupplierSheet({
     if (!selectedFile) return;
     setStatus('extracting');
     setExtractionError(null);
+    setRutMismatch(null);
     try {
       const res = await extractSupplierDocument(selectedFile);
       if (!res.success || !res.data) {
         setExtractionError('No se pudo analizar el documento. Puedes completar los datos manualmente.');
       } else {
         applyExtracted(res.data);
+
+        // RUT mismatch check: when adding a doc to an existing supplier
+        if (presetSupplierId && presetSupplier && res.data.supplierRut) {
+          const extractedRut = res.data.supplierRut.trim().replace(/\./g, '');
+          const supplierRut = presetSupplier.taxIdentifier.trim().replace(/\./g, '');
+          if (extractedRut.toLowerCase() !== supplierRut.toLowerCase()) {
+            setRutMismatch({
+              extracted: res.data.supplierRut,
+              supplier: presetSupplier.taxIdentifier,
+            });
+          }
+        }
+
         setStep('form');
       }
     } catch {
@@ -204,6 +236,7 @@ export function CreateSupplierSheet({
     e.preventDefault();
     setApiError(null);
     setFileUploadWarning(null);
+    setDuplicateSupplier(null);
     if (!validate()) return;
 
     setStatus('loading');
@@ -213,6 +246,16 @@ export function CreateSupplierSheet({
 
       // Step 1: upsert supplier (only if not pre-scoped)
       if (!supplierId) {
+        // Duplicate RUT check: prevent silently updating an existing supplier
+        const cleanedRut = fields.taxIdentifier.trim().replace(/\./g, '');
+        const lookupRes = await listSuppliers({ taxIdentifier: cleanedRut, limit: 1 });
+        if (lookupRes.success && lookupRes.data && lookupRes.data.length > 0) {
+          const existing = lookupRes.data[0];
+          setDuplicateSupplier(existing);
+          setStatus('idle');
+          return;
+        }
+
         const res = await upsertSupplier({
           legalName: fields.legalName.trim(),
           taxIdentifier: fields.taxIdentifier.trim(),
@@ -252,7 +295,7 @@ export function CreateSupplierSheet({
       const hasServiceData = fields.serviceDescription || fields.serviceCategory
         || fields.tariffType || fields.tariffDetail || fields.amounts.length > 0;
 
-      if (storagePath && supplierId && (hasServiceData || storagePath)) {
+      if (storagePath && supplierId) {
         const docRes = await createSupplierDocument(supplierId, {
           fileName: selectedFile!.name,
           storagePath,
@@ -283,13 +326,15 @@ export function CreateSupplierSheet({
   }
 
   function handleReset(): void {
-    setStep(presetSupplierId ? 'form' : 'upload');
+    setStep('upload');
     setFields({
       legalName: '', taxIdentifier: '', serviceDescription: '', serviceCategory: '', tariffType: '', tariffDetail: '', amounts: [],
     });
     setFieldErrors({});
     setApiError(null);
     setFileUploadWarning(null);
+    setRutMismatch(null);
+    setDuplicateSupplier(null);
     setStatus('idle');
     removeFile();
   }
@@ -308,14 +353,14 @@ export function CreateSupplierSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      {trigger ? (
-        <div onClick={() => setOpen(true)} className="cursor-pointer">{trigger}</div>
-      ) : (
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <PlusIcon className="h-4 w-4" />
-          Nuevo proveedor
-        </Button>
-      )}
+      <SheetTrigger asChild>
+        {trigger ?? (
+          <Button size="sm">
+            <PlusIcon className="h-4 w-4" />
+            Nuevo proveedor
+          </Button>
+        )}
+      </SheetTrigger>
 
       <SheetContent side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-lg">
         <SheetHeader className="border-b px-4 py-4">
@@ -474,6 +519,40 @@ export function CreateSupplierSheet({
           /* ── Step 2: Review & edit form ── */
           <form onSubmit={handleSubmit} noValidate className="flex flex-1 flex-col overflow-hidden">
             <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+              {rutMismatch && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <p className="font-medium mb-1">El RUT del documento no coincide con el proveedor</p>
+                  <table className="w-full text-xs mt-2 border-collapse">
+                    <tbody>
+                      <tr>
+                        <td className="py-0.5 pr-3 text-amber-700 font-medium">Documento:</td>
+                        <td className="py-0.5 font-mono">{rutMismatch.extracted}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-0.5 pr-3 text-amber-700 font-medium">Proveedor:</td>
+                        <td className="py-0.5 font-mono">{rutMismatch.supplier}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p className="mt-2 text-xs text-amber-600">
+                    Puedes continuar de todas formas o verificar que el documento sea correcto.
+                  </p>
+                </div>
+              )}
+
+              {duplicateSupplier && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <p className="font-medium">Ya existe un proveedor con este RUT</p>
+                  <p className="mt-1 text-xs">
+                    RUT {duplicateSupplier.taxIdentifier}:{' '}
+                    <strong>{duplicateSupplier.legalName}</strong>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Ingresa un RUT diferente o busca al proveedor existente en el listado.
+                  </p>
+                </div>
+              )}
+
               {apiError && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {apiError}
