@@ -20,8 +20,9 @@ export async function findByOrgAndSupplier(
   organizationId: string,
   supplierId: string,
 ): Promise<OrganizationSupplierRow | null> {
-  const { data, error } = await (supabaseAdmin() as any)
-    .from('organization_suppliers')
+  const { data, error } = await supabaseAdmin()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .from('organization_suppliers' as any)
     .select('*')
     .eq('organization_id', organizationId)
     .eq('supplier_id', supplierId)
@@ -41,8 +42,9 @@ export async function create(
   organizationId: string,
   supplierId: string,
 ): Promise<OrganizationSupplierRow> {
-  const { data, error } = await (supabaseAdmin() as any)
-    .from('organization_suppliers')
+  const { data, error } = await supabaseAdmin()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .from('organization_suppliers' as any)
     .insert({ organization_id: organizationId, supplier_id: supplierId })
     .select()
     .single();
