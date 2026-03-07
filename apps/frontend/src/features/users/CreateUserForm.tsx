@@ -24,6 +24,7 @@ interface FieldErrors {
 
 interface CreateUserFormProps {
   onSuccess?: () => void;
+  orgId?: string;
 }
 
 const ROLE_OPTIONS: { value: FormFields['role']; label: string }[] = [
@@ -37,7 +38,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Cached so the form doesn't call getMe() on every mount
 let cachedOrgId: string | null = null;
 
-export function CreateUserForm({ onSuccess }: CreateUserFormProps): React.JSX.Element {
+export function CreateUserForm(
+  { onSuccess, orgId: orgIdProp }: CreateUserFormProps,
+): React.JSX.Element {
   const [fields, setFields] = useState<FormFields>({
     email: '',
     firstName: '',
@@ -49,7 +52,7 @@ export function CreateUserForm({ onSuccess }: CreateUserFormProps): React.JSX.El
   const [apiError, setApiError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [showPassword, setShowPassword] = useState(false);
-  const orgIdRef = useRef<string | null>(cachedOrgId);
+  const orgIdRef = useRef<string | null>(orgIdProp ?? cachedOrgId);
 
   useEffect(() => {
     if (orgIdRef.current) return;
