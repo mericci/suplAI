@@ -7,7 +7,7 @@
 import { logger } from '../../../utils/logger.js';
 import * as supplierDocumentDb from '../../../db/supplier-document.db.js';
 import { getErrorMessage } from '../../../utils/error.js';
-import { supabase } from '../../../lib/supabase.js';
+import { supabaseAdmin } from '../../../lib/supabase.js';
 
 const SIGNED_URL_EXPIRY_SECONDS = 3600; // 1 hour
 
@@ -22,7 +22,7 @@ export async function getSupplierDocumentPreviewUrl(
     if (!doc) throw new Error('Document not found');
     if (doc.supplier_id !== supplierId) throw new Error('Document not found');
 
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabaseAdmin().storage
       .from(doc.storage_bucket)
       .createSignedUrl(doc.storage_path, SIGNED_URL_EXPIRY_SECONDS);
 
