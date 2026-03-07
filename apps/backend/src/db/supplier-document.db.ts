@@ -74,6 +74,30 @@ export async function create(data: CreateSupplierDocumentData): Promise<Supplier
 }
 
 /**
+ * Atomically demote existing current cost contracts and insert new document in a single transaction.
+ * Uses the upsert_supplier_document RPC to avoid a race condition between demote and insert.
+ */
+export async function createAtomic(data: CreateSupplierDocumentData): Promise<SupplierDocumentRow> {
+  const { data: doc, error } = await db.rpc('upsert_supplier_document', {
+    p_supplier_id: data.supplier_id,
+    p_file_name: data.file_name,
+    p_storage_path: data.storage_path,
+    p_storage_bucket: data.storage_bucket ?? 'supplier-evidence',
+    p_document_type: data.document_type ?? null,
+    p_service_category: data.service_category ?? null,
+    p_service_description: data.service_description ?? null,
+    p_tariff_type: data.tariff_type ?? null,
+    p_tariff_detail: data.tariff_detail ?? null,
+    p_amounts: JSON.stringify(data.amounts ?? []),
+    p_document_role: data.document_role ?? 'cost_contract',
+    p_is_current: data.is_current ?? false,
+  });
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return doc as SupplierDocumentRow;
+}
+
+/**
  * Demote all current cost_contract documents for a supplier (set is_current = false).
  */
 export async function demoteCurrentDocuments(supplierId: string): Promise<void> {

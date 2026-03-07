@@ -23,12 +23,18 @@ jobs:
       - name: Deploy Preview
         if: github.event_name == 'pull_request'
         id: preview
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           DEPLOY_URL=$(vercel --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -E "^https://" | tail -n 1)
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
 
       - name: Deploy to Production
         if: github.event_name == 'push'
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Comment Preview URL on PR

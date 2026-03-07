@@ -300,6 +300,7 @@ export function CreateSupplierSheet({
           fileName: selectedFile!.name,
           storagePath,
           documentType: null,
+          documentRole: 'cost_contract',
           serviceCategory: fields.serviceCategory || null,
           serviceDescription: fields.serviceDescription || null,
           tariffType: fields.tariffType || null,
