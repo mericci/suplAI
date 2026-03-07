@@ -27,7 +27,7 @@ export function registerSupplierRoutes(router: Router): void {
   // POST /api/suppliers/upsert — find-or-create by taxIdentifier
   router.post(
     '/api/suppliers/upsert',
-    requireAuth(async (req) => upsertSupplierHandler(req)),
+    requireAuth(async (req, context) => upsertSupplierHandler(req, context)),
   );
   router.put(
     '/api/suppliers/:id',

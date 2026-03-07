@@ -24,6 +24,8 @@ export interface SupplierDocumentRow {
   tariff_type: string | null;
   tariff_detail: string | null;
   amounts: SupplierDocumentAmount[];
+  document_role: 'cost_contract' | 'additional';
+  is_current: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -40,6 +42,8 @@ export interface CreateSupplierDocumentData {
   tariff_type?: string | null;
   tariff_detail?: string | null;
   amounts?: SupplierDocumentAmount[];
+  document_role?: 'cost_contract' | 'additional';
+  is_current?: boolean;
 }
 
 /**
@@ -59,12 +63,28 @@ export async function create(data: CreateSupplierDocumentData): Promise<Supplier
       tariff_type: data.tariff_type ?? null,
       tariff_detail: data.tariff_detail ?? null,
       amounts: data.amounts ?? [],
+      document_role: data.document_role ?? 'cost_contract',
+      is_current: data.is_current ?? false,
     })
     .select()
     .single();
 
   if (error) throw new Error(`Database error: ${error.message}`);
   return doc as SupplierDocumentRow;
+}
+
+/**
+ * Demote all current cost_contract documents for a supplier (set is_current = false).
+ */
+export async function demoteCurrentDocuments(supplierId: string): Promise<void> {
+  const { error } = await db
+    .from('supplier_documents')
+    .update({ is_current: false })
+    .eq('supplier_id', supplierId)
+    .eq('document_role', 'cost_contract')
+    .is('deleted_at', null);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
 }
 
 /**

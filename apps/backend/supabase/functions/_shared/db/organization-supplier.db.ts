@@ -5,7 +5,7 @@
  * Tracks which suppliers are associated with each organization through invoice sync.
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
 
 interface OrganizationSupplierRow {
   organization_id: string;
@@ -20,7 +20,7 @@ export async function findByOrgAndSupplier(
   organizationId: string,
   supplierId: string,
 ): Promise<OrganizationSupplierRow | null> {
-  const { data, error } = await (supabase as any)
+  const { data, error } = await (supabaseAdmin() as any)
     .from('organization_suppliers')
     .select('*')
     .eq('organization_id', organizationId)
@@ -41,7 +41,7 @@ export async function create(
   organizationId: string,
   supplierId: string,
 ): Promise<OrganizationSupplierRow> {
-  const { data, error } = await (supabase as any)
+  const { data, error } = await (supabaseAdmin() as any)
     .from('organization_suppliers')
     .insert({ organization_id: organizationId, supplier_id: supplierId })
     .select()
