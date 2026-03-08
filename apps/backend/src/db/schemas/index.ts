@@ -82,3 +82,14 @@ export {
   type CreateSupplierDocumentInput,
   validateCreateSupplierDocument,
 } from './supplier-document.schema.js';
+
+// Budget Item Schemas
+export {
+  PeriodicityEnum,
+  BudgetPeriodEnum,
+  CreateBudgetItemSchema,
+  type Periodicity,
+  type BudgetPeriod,
+  type CreateBudgetItemInput,
+  validateCreateBudgetItem,
+} from './budget-item.schema.js';
