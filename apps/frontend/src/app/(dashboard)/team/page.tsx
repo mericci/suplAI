@@ -1,5 +1,6 @@
 'use client';
 
+import type { Organization } from '@supl/shared';
 import {
   useCallback,
   useEffect,
@@ -8,10 +9,10 @@ import {
 } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import {
+  BuildingIcon,
   MoreHorizontalIcon,
   PlusIcon,
   Trash2Icon,
-  UserIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -43,6 +44,7 @@ import {
   deleteUser,
 } from '@/integrations/backend/users';
 import type { User } from '@/integrations/backend/users';
+import { getOrganization } from '@/integrations/backend/organizations';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -78,8 +80,24 @@ function getDisplayName(user: User): string {
   return user.email;
 }
 
+function formatTaxId(taxId: string): string {
+  // Format Chilean RUT: 12345678-9
+  const clean = taxId.replace(/\./g, '').replace(/-/g, '');
+  if (clean.length < 2) return taxId;
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+  const formatted = body.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${formatted}-${dv}`;
+}
+
+interface PageData {
+  users: User[];
+  org: Organization | null;
+  currentUserId: string | null;
+}
+
 export default function TeamPage(): React.JSX.Element {
-  const [users, setUsers] = useState<User[]>([]);
+  const [data, setData] = useState<PageData>({ users: [], org: null, currentUserId: null });
   const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
@@ -88,7 +106,7 @@ export default function TeamPage(): React.JSX.Element {
   const [pageError, setPageError] = useState<string | null>(null);
   const orgIdRef = useRef<string | null>(null);
 
-  const loadUsers = useCallback(async (): Promise<void> => {
+  const loadData = useCallback(async (): Promise<void> => {
     setLoadStatus('loading');
     setPageError(null);
     try {
@@ -98,14 +116,19 @@ export default function TeamPage(): React.JSX.Element {
         setLoadStatus('error');
         return;
       }
-      orgIdRef.current = meRes.data.organization_id;
-      const res = await listUsers(meRes.data.organization_id);
-      if (!res.success) {
-        setPageError('Error al cargar el equipo.');
-        setLoadStatus('error');
-        return;
-      }
-      setUsers(res.data);
+      const orgId = meRes.data.organization_id;
+      orgIdRef.current = orgId;
+
+      const [usersRes, orgRes] = await Promise.all([
+        listUsers(orgId),
+        getOrganization(orgId),
+      ]);
+
+      setData({
+        users: usersRes.success ? usersRes.data : [],
+        org: orgRes.success && orgRes.data ? orgRes.data : null,
+        currentUserId: meRes.data.id,
+      });
       setLoadStatus('loaded');
     } catch {
       setPageError('Error inesperado al cargar el equipo.');
@@ -114,8 +137,8 @@ export default function TeamPage(): React.JSX.Element {
   }, []);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    loadData();
+  }, [loadData]);
 
   async function handleRoleChange(user: User, newRole: string): Promise<void> {
     const orgId = orgIdRef.current;
@@ -126,7 +149,10 @@ export default function TeamPage(): React.JSX.Element {
       if (!res.success) {
         setPageError(res.error ?? 'Error al actualizar el rol.');
       } else {
-        setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u)));
+        setData((prev) => ({
+          ...prev,
+          users: prev.users.map((u) => (u.id === user.id ? { ...u, role: newRole } : u)),
+        }));
       }
     } catch {
       setPageError('Error inesperado al actualizar el rol.');
@@ -141,7 +167,10 @@ export default function TeamPage(): React.JSX.Element {
     setDeleteLoading(true);
     try {
       await deleteUser(orgId, deleteTarget.id);
-      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+      setData((prev) => ({
+        ...prev,
+        users: prev.users.filter((u) => u.id !== deleteTarget.id),
+      }));
       setDeleteTarget(null);
     } catch {
       setPageError('Error inesperado al eliminar el usuario.');
@@ -152,8 +181,10 @@ export default function TeamPage(): React.JSX.Element {
 
   function handleAddSuccess(): void {
     setAddDialogOpen(false);
-    loadUsers();
+    loadData();
   }
+
+  const { users, org, currentUserId } = data;
 
   return (
     <div className="flex h-full flex-col">
@@ -170,145 +201,189 @@ export default function TeamPage(): React.JSX.Element {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-4 sm:p-6">
-        {pageError && (
-          <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {pageError}
-          </div>
-        )}
+        <div className="mx-auto max-w-4xl space-y-6">
+          {pageError && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {pageError}
+            </div>
+          )}
 
-        {loadStatus === 'loading' && (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <Skeleton className="h-4 w-28" />
-                      </div>
-                    </TableCell>
-                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                    <TableCell />
+          {/* Organization card */}
+          {loadStatus === 'loading' ? (
+            <div className="flex items-center gap-4 rounded-lg border bg-card p-5">
+              <Skeleton className="h-12 w-12 rounded-lg" />
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            </div>
+          ) : org && (
+            <div className="flex items-center gap-4 rounded-lg border bg-card p-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                <BuildingIcon className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold">{org.legalName}</p>
+                <p className="text-sm text-muted-foreground">
+                  RUT: {formatTaxId(org.taxIdentifier)}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Team table */}
+          {loadStatus === 'loading' && (
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Usuario</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Rol</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
-        {loadStatus === 'loaded' && users.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <UserIcon className="h-6 w-6 text-muted-foreground" />
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-8 w-8 rounded-full" />
+                          <Skeleton className="h-4 w-28" />
+                        </div>
+                      </TableCell>
+                      <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            <div>
-              <p className="font-medium">Sin miembros aún</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Agrega el primer usuario al equipo.
-              </p>
-            </div>
-            <Button size="sm" onClick={() => setAddDialogOpen(true)}>
-              <PlusIcon className="mr-1.5 h-4 w-4" />
-              Agregar usuario
-            </Button>
-          </div>
-        )}
+          )}
 
-        {loadStatus === 'loaded' && users.length > 0 && (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          {user.avatar_url && <AvatarImage src={user.avatar_url} />}
-                          <AvatarFallback className="text-xs">
-                            {getInitials(user)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{getDisplayName(user)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={ROLE_VARIANTS[user.role] ?? 'outline'}>
-                        {ROLE_LABELS[user.role] ?? user.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
-                        {user.status === 'active' ? 'Activo' : 'Inactivo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            disabled={roleLoading === user.id}
+          {loadStatus === 'loaded' && (
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Usuario</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Rol</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <div className="py-8 text-center text-sm text-muted-foreground">
+                          No hay otros miembros en el equipo.{' '}
+                          <button
+                            type="button"
+                            className="text-foreground underline underline-offset-2"
+                            onClick={() => setAddDialogOpen(true)}
                           >
-                            <MoreHorizontalIcon className="h-4 w-4" />
-                            <span className="sr-only">Acciones</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Cambiar rol</DropdownMenuLabel>
-                          {ROLE_OPTIONS.map((opt) => (
-                            <DropdownMenuItem
-                              key={opt.value}
-                              onClick={() => { handleRoleChange(user, opt.value); }}
-                              disabled={user.role === opt.value}
-                            >
-                              {opt.label}
-                              {user.role === opt.value && (
-                                <span className="ml-auto text-xs text-muted-foreground">
-                                  actual
+                            Agregar uno
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    users.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              {user.avatar_url && <AvatarImage src={user.avatar_url} />}
+                              <AvatarFallback className="text-xs">
+                                {getInitials(user)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{getDisplayName(user)}</span>
+                              {user.id === currentUserId && (
+                                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                                  Tú
                                 </span>
                               )}
-                            </DropdownMenuItem>
-                          ))}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => setDeleteTarget(user)}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {user.email}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={ROLE_VARIANTS[user.role] ?? 'outline'}>
+                            {ROLE_LABELS[user.role] ?? user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={user.status === 'active' ? 'default' : 'secondary'}
                           >
-                            <Trash2Icon className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                            {user.status === 'active' ? 'Activo' : 'Inactivo'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {user.id !== currentUserId && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  disabled={roleLoading === user.id}
+                                >
+                                  <MoreHorizontalIcon className="h-4 w-4" />
+                                  <span className="sr-only">Acciones</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Cambiar rol</DropdownMenuLabel>
+                                {ROLE_OPTIONS.map((opt) => (
+                                  <DropdownMenuItem
+                                    key={opt.value}
+                                    onClick={() => { handleRoleChange(user, opt.value); }}
+                                    disabled={user.role === opt.value}
+                                  >
+                                    {opt.label}
+                                    {user.role === opt.value && (
+                                      <span className="ml-auto text-xs text-muted-foreground">
+                                        actual
+                                      </span>
+                                    )}
+                                  </DropdownMenuItem>
+                                ))}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setDeleteTarget(user)}
+                                >
+                                  <Trash2Icon className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {loadStatus === 'error' && !pageError && (
+            <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
+              No se pudieron cargar los datos del equipo.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Add user dialog */}
