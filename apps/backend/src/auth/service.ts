@@ -4,7 +4,7 @@
  * Handles user authentication operations
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabase, supabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../utils/logger.js';
 import { getErrorMessage } from '../utils/error.js';
 import { isValidEmail, isValidPassword } from '../utils/validation.js';
@@ -30,6 +30,36 @@ interface AuthResponse {
     refresh_token: string;
     expires_in: number;
   };
+}
+
+/**
+ * Create a confirmed user via admin API (no email confirmation needed)
+ */
+export async function adminCreateUser(input: {
+  email: string;
+  password?: string;
+}): Promise<{ id: string; email: string }> {
+  const { data, error } = await supabaseAdmin().auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+  });
+
+  if (error) {
+    logger.error('Admin create user error', {
+      email: input.email,
+      error: getErrorMessage(error),
+    });
+    throw new Error(getErrorMessage(error));
+  }
+
+  if (!data.user) {
+    throw new Error('Failed to create auth user');
+  }
+
+  logger.info('Auth user created via admin API', { userId: data.user.id });
+
+  return { id: data.user.id, email: data.user.email! };
 }
 
 /**
