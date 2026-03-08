@@ -42,11 +42,26 @@ function formatCLP(value: number): string {
 const ALL_VALUE = '__all__';
 const LIMIT_COLOR = '#d97706';
 
-// Generates evenly-spaced ticks and inserts the budget reference so it always appears
+// Generates nice evenly-spaced ticks that always include 0, domainMax, and budgetRef
 function buildSpendTicks(domainMax: number, budgetRef: number): number[] {
-  const step = Math.ceil(domainMax / 4 / 1000) * 1000 || 1;
+  if (domainMax <= 0) return [0];
+
+  // Pick a "nice" step (same algorithm recharts uses internally)
+  const rawStep = domainMax / 4;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / magnitude;
+  const niceNorm = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10;
+  const step = niceNorm * magnitude;
+
   const ticks: number[] = [];
-  for (let t = 0; t <= domainMax; t += step) ticks.push(t);
+  for (let t = 0; t <= domainMax; t += step) {
+    ticks.push(Math.round(t));
+  }
+  // Always include the domain ceiling so the tallest bar has a tick at the top
+  if (ticks[ticks.length - 1] < domainMax) {
+    ticks.push(Math.round(domainMax));
+  }
+
   if (budgetRef > 0 && !ticks.includes(budgetRef)) {
     ticks.push(budgetRef);
     ticks.sort((a, b) => a - b);
