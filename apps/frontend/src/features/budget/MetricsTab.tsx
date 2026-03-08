@@ -10,6 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  type LabelProps,
 } from 'recharts';
 import {
   Select,
@@ -40,6 +41,48 @@ function formatCLP(value: number): string {
 }
 
 const ALL_VALUE = '__all__';
+
+// Custom SVG label rendered as a floating pill at the right edge of the reference line
+function BudgetLimitLabel({ viewBox, value }: LabelProps): React.JSX.Element | null {
+  if (!viewBox || typeof viewBox !== 'object') return null;
+  const { x = 0, y = 0, width = 0 } = viewBox as { x: number; y: number; width: number };
+  const labelText = String(value ?? '');
+  const charW = 6.8;
+  const padX = 9;
+  const padY = 3;
+  const rectW = labelText.length * charW + padX * 2;
+  const rectH = 18;
+  const lx = x + width - rectW - 2;
+  const ly = y - rectH / 2 - 2;
+
+  return (
+    <g>
+      <rect
+        x={lx}
+        y={ly}
+        width={rectW}
+        height={rectH}
+        rx={9}
+        fill="white"
+        stroke="#e2af3f"
+        strokeWidth={1}
+        style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))' }}
+      />
+      <text
+        x={lx + rectW / 2}
+        y={ly + rectH / 2 + 0.5}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#92400e"
+        fontSize={9.5}
+        fontWeight={600}
+        letterSpacing={0.2}
+      >
+        {labelText}
+      </text>
+    </g>
+  );
+}
 
 export function MetricsTab({
   metrics,
@@ -141,16 +184,11 @@ export function MetricsTab({
                 {budgetReference > 0 && (
                   <ReferenceLine
                     y={budgetReference}
-                    stroke="#ef4444"
-                    strokeDasharray="6 3"
+                    stroke="#e2af3f"
+                    strokeDasharray="4 4"
                     strokeWidth={1.5}
-                    label={{
-                      value: `Límite: ${formatCLP(budgetReference)}`,
-                      position: 'insideTopRight',
-                      fontSize: 10,
-                      fill: '#ef4444',
-                      dy: -6,
-                    }}
+                    strokeOpacity={0.75}
+                    label={<BudgetLimitLabel value={`Límite ${formatCLP(budgetReference)}`} />}
                   />
                 )}
               </BarChart>
