@@ -10,7 +10,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  type LabelProps,
 } from 'recharts';
 import {
   Select,
@@ -41,44 +40,42 @@ function formatCLP(value: number): string {
 }
 
 const ALL_VALUE = '__all__';
+const LIMIT_COLOR = '#d97706';
 
-// Custom SVG label rendered as a floating pill at the right edge of the reference line
-function BudgetLimitLabel({ viewBox, value }: LabelProps): React.JSX.Element | null {
-  if (!viewBox || typeof viewBox !== 'object') return null;
-  const { x = 0, y = 0, width = 0 } = viewBox as { x: number; y: number; width: number };
-  const labelText = String(value ?? '');
-  const charW = 6.8;
-  const padX = 9;
-  const padY = 3;
-  const rectW = labelText.length * charW + padX * 2;
-  const rectH = 18;
-  const lx = x + width - rectW - 2;
-  const ly = y - rectH / 2 - 2;
+// Generates evenly-spaced ticks and inserts the budget reference so it always appears
+function buildSpendTicks(domainMax: number, budgetRef: number): number[] {
+  const step = Math.ceil(domainMax / 4 / 1000) * 1000 || 1;
+  const ticks: number[] = [];
+  for (let t = 0; t <= domainMax; t += step) ticks.push(t);
+  if (budgetRef > 0 && !ticks.includes(budgetRef)) {
+    ticks.push(budgetRef);
+    ticks.sort((a, b) => a - b);
+  }
+  return ticks;
+}
 
+// Custom Y-axis tick: colors the budget-limit value amber, rest stay grey
+function SpendAxisTick({
+  x, y, payload, budgetRef,
+}: {
+  x?: number | string; y?: number | string;
+  payload?: { value: number };
+  budgetRef: number;
+}): React.JSX.Element | null {
+  if (!payload) return null;
+  const isLimit = payload.value === budgetRef;
   return (
-    <g>
-      <rect
-        x={lx}
-        y={ly}
-        width={rectW}
-        height={rectH}
-        rx={9}
-        fill="white"
-        stroke="#e2af3f"
-        strokeWidth={1}
-        style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.08))' }}
-      />
+    <g transform={`translate(${x ?? 0},${y ?? 0})`}>
       <text
-        x={lx + rectW / 2}
-        y={ly + rectH / 2 + 0.5}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="#92400e"
-        fontSize={9.5}
-        fontWeight={600}
-        letterSpacing={0.2}
+        x={0}
+        y={0}
+        dy={4}
+        textAnchor="end"
+        fill={isLimit ? LIMIT_COLOR : '#888'}
+        fontSize={11}
+        fontWeight={isLimit ? 700 : 400}
       >
-        {labelText}
+        {formatCLP(payload.value)}
       </text>
     </g>
   );
@@ -161,9 +158,9 @@ export function MetricsTab({
                   tickLine={false}
                 />
                 <YAxis
-                  tickFormatter={formatCLP}
                   domain={spendDomain}
-                  tick={{ fontSize: 11, fill: '#888' }}
+                  ticks={buildSpendTicks(spendDomain[1], budgetReference)}
+                  tick={(props) => <SpendAxisTick {...props} budgetRef={budgetReference} />}
                   axisLine={false}
                   tickLine={false}
                   width={55}
@@ -184,11 +181,10 @@ export function MetricsTab({
                 {budgetReference > 0 && (
                   <ReferenceLine
                     y={budgetReference}
-                    stroke="#e2af3f"
+                    stroke={LIMIT_COLOR}
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
-                    strokeOpacity={0.75}
-                    label={<BudgetLimitLabel value={`Límite ${formatCLP(budgetReference)}`} />}
+                    strokeOpacity={0.6}
                   />
                 )}
               </BarChart>
