@@ -11,4 +11,5 @@ export * from './sii';
 export * from './test';
 export * from './organizations';
 export * from './suppliers';
+export * from './budget';
 export type { ApiResponse, PaginatedResponse } from './client';
