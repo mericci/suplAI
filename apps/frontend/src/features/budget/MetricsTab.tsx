@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -8,13 +9,23 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
-import type { BudgetMetrics } from '@/integrations/backend/budget';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { BudgetMetrics, BudgetItemWithSpend } from '@/integrations/backend/budget';
 import { MONTH_LABELS } from './constants';
 
 interface MetricsTabProps {
   metrics: BudgetMetrics | null;
   loading: boolean;
+  items: BudgetItemWithSpend[];
+  onFilterChange: (budgetItemIds: string[] | null) => void;
 }
 
 function formatMonthLabel(month: string): string {
@@ -28,98 +39,155 @@ function formatCLP(value: number): string {
   return `$${value}`;
 }
 
-interface ChartEntry {
-  month: string;
-  totalSpent: number;
-  compliancePct: number;
-}
+const ALL_VALUE = '__all__';
 
-export function MetricsTab({ metrics, loading }: MetricsTabProps): React.JSX.Element {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        Cargando métricas...
-      </div>
-    );
+export function MetricsTab({
+  metrics,
+  loading,
+  items,
+  onFilterChange,
+}: MetricsTabProps): React.JSX.Element {
+  const [selectedId, setSelectedId] = useState<string>(ALL_VALUE);
+
+  function handleFilterChange(val: string): void {
+    setSelectedId(val);
+    if (val === ALL_VALUE) {
+      onFilterChange(null);
+    } else {
+      onFilterChange([val]);
+    }
   }
 
-  if (!metrics || metrics.monthly.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-        No hay datos de métricas disponibles.
-      </div>
-    );
-  }
+  // Budget reference value: monthly budget from the response (constant across months)
+  const budgetReference = metrics?.monthly.find((m) => m.totalBudget > 0)?.totalBudget ?? 0;
 
-  const chartData: ChartEntry[] = metrics.monthly.map((m) => ({
+  const chartData = (metrics?.monthly ?? []).map((m) => ({
     month: formatMonthLabel(m.month),
     totalSpent: m.totalSpent,
     compliancePct: m.compliancePct,
   }));
 
+  // Y axis domain for spend chart: leave room above the reference line
+  const maxSpent = Math.max(...(metrics?.monthly ?? []).map((m) => m.totalSpent), budgetReference, 1);
+  const spendDomain: [number, number] = [0, Math.ceil(maxSpent * 1.15)];
+
+  // Compliance Y domain: auto when values exceed 100%
+  const maxCompliance = Math.max(...(metrics?.monthly ?? []).map((m) => m.compliancePct), 100);
+  const complianceDomain: [number, number] = [0, Math.ceil(maxCompliance * 1.15)];
+
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      {/* Gasto acumulado mensual */}
-      <div className="rounded-xl border bg-card p-5">
-        <h3 className="mb-4 text-sm font-semibold">Gasto acumulado mensual</h3>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={chartData} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-            <XAxis
-              dataKey="month"
-              tick={{ fontSize: 11, fill: '#888' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tickFormatter={formatCLP}
-              tick={{ fontSize: 11, fill: '#888' }}
-              axisLine={false}
-              tickLine={false}
-              width={50}
-            />
-            <Tooltip
-              formatter={(value) => [
-                new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(value ?? 0)),
-                'Gasto',
-              ]}
-              labelStyle={{ fontSize: 12 }}
-              contentStyle={{ fontSize: 12, borderRadius: 8 }}
-            />
-            <Bar dataKey="totalSpent" fill="#4f7beb" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+    <div className="space-y-4">
+      {/* Filter bar */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-muted-foreground">Filtrar por presupuesto:</span>
+        <Select value={selectedId} onValueChange={handleFilterChange}>
+          <SelectTrigger className="w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>Todos los presupuestos</SelectItem>
+            {items.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* % Cumplimiento mensual */}
-      <div className="rounded-xl border bg-card p-5">
-        <h3 className="mb-4 text-sm font-semibold">% Cumplimiento mensual</h3>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={chartData} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-            <XAxis
-              dataKey="month"
-              tick={{ fontSize: 11, fill: '#888' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tickFormatter={(v) => `${v}%`}
-              domain={[0, 100]}
-              tick={{ fontSize: 11, fill: '#888' }}
-              axisLine={false}
-              tickLine={false}
-              width={45}
-            />
-            <Tooltip
-              formatter={(value) => [`${value ?? 0}%`, 'Cumplimiento']}
-              labelStyle={{ fontSize: 12 }}
-              contentStyle={{ fontSize: 12, borderRadius: 8 }}
-            />
-            <Bar dataKey="compliancePct" fill="#f97316" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
+          Cargando métricas...
+        </div>
+      ) : !metrics || metrics.monthly.length === 0 ? (
+        <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
+          No hay datos de métricas disponibles.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Gasto acumulado mensual — with budget reference line */}
+          <div className="rounded-xl border bg-card p-5">
+            <h3 className="mb-4 text-sm font-semibold">Gasto acumulado mensual</h3>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11, fill: '#888' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={formatCLP}
+                  domain={spendDomain}
+                  tick={{ fontSize: 11, fill: '#888' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={55}
+                />
+                <Tooltip
+                  formatter={(value) => [
+                    new Intl.NumberFormat('es-CL', {
+                      style: 'currency',
+                      currency: 'CLP',
+                      maximumFractionDigits: 0,
+                    }).format(Number(value ?? 0)),
+                    'Gasto',
+                  ]}
+                  labelStyle={{ fontSize: 12 }}
+                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                />
+                <Bar dataKey="totalSpent" fill="#4f7beb" radius={[4, 4, 0, 0]} />
+                {budgetReference > 0 && (
+                  <ReferenceLine
+                    y={budgetReference}
+                    stroke="#ef4444"
+                    strokeDasharray="6 3"
+                    strokeWidth={1.5}
+                    label={{
+                      value: `Límite: ${formatCLP(budgetReference)}`,
+                      position: 'insideTopRight',
+                      fontSize: 10,
+                      fill: '#ef4444',
+                      dy: -6,
+                    }}
+                  />
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* % Cumplimiento mensual */}
+          <div className="rounded-xl border bg-card p-5">
+            <h3 className="mb-4 text-sm font-semibold">% Cumplimiento mensual</h3>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11, fill: '#888' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={(v) => `${v}%`}
+                  domain={complianceDomain}
+                  tick={{ fontSize: 11, fill: '#888' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={50}
+                />
+                <Tooltip
+                  formatter={(value) => [`${value ?? 0}%`, 'Cumplimiento']}
+                  labelStyle={{ fontSize: 12 }}
+                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                />
+                <Bar dataKey="compliancePct" fill="#f97316" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

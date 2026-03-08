@@ -112,12 +112,12 @@ export default function BudgetPage(): React.JSX.Element {
     }
   }, [loadOrgAndSuppliers]);
 
-  const loadMetrics = useCallback(async (): Promise<void> => {
+  const loadMetrics = useCallback(async (budgetItemIds?: string[] | null): Promise<void> => {
     setMetricsLoading(true);
     try {
       const orgId = await loadOrgAndSuppliers();
       if (!orgId) return;
-      const res = await getBudgetMetrics(orgId);
+      const res = await getBudgetMetrics(orgId, budgetItemIds ?? undefined);
       if (res.success && res.data) {
         setMetrics(res.data);
       }
@@ -137,6 +137,11 @@ export default function BudgetPage(): React.JSX.Element {
       loadMetrics();
     }
   }, [tab, metrics, loadMetrics]);
+
+  function handleMetricsFilterChange(budgetItemIds: string[] | null): void {
+    setMetrics(null);
+    loadMetrics(budgetItemIds);
+  }
 
   async function handleDelete(item: BudgetItemWithSpend): Promise<void> {
     const orgId = orgIdRef.current;
@@ -347,7 +352,12 @@ export default function BudgetPage(): React.JSX.Element {
 
             {/* Metrics Tab */}
             <Tabs.Content value={TAB_METRICS} className="pt-4">
-              <MetricsTab metrics={metrics} loading={metricsLoading} />
+              <MetricsTab
+                metrics={metrics}
+                loading={metricsLoading}
+                items={items}
+                onFilterChange={handleMetricsFilterChange}
+              />
             </Tabs.Content>
           </Tabs.Root>
         </div>

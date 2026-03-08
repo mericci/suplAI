@@ -2,6 +2,8 @@
  * Get Budget Metrics Action
  *
  * Returns monthly spend vs. budget for the rolling 12-month window.
+ * Spend is scoped only to suppliers linked to the selected budget items.
+ * If budgetItemIds is provided, only those items are included; otherwise all active items.
  */
 
 import { supabase } from '../../../lib/supabase.js';
@@ -43,17 +45,37 @@ function getMonthlyAmount(amount: number, periodicity: Periodicity): number {
   return amount / 12; // annual
 }
 
-export async function getBudgetMetrics(organizationId: string): Promise<BudgetMetrics> {
+export async function getBudgetMetrics(
+  organizationId: string,
+  budgetItemIds?: string[],
+): Promise<BudgetMetrics> {
   try {
     const months = getLast12Months();
     const firstMonth = months[0];
     const lastMonth = months[months.length - 1];
 
-    // Fetch all invoices for the 12-month window
+    // Load all active budget items, then filter by the requested IDs if provided
+    const allItems = await budgetItemDb.findAllByOrganization(organizationId);
+    const items = budgetItemIds && budgetItemIds.length > 0
+      ? allItems.filter((item) => budgetItemIds.includes(item.id))
+      : allItems;
+
+    // Collect supplier IDs linked to the selected budget items (deduplicated)
+    const supplierIds = [...new Set(
+      items.map((item) => item.supplier_id).filter((id): id is string => id !== null),
+    )];
+
+    // Total monthly budget = sum of selected items' monthly-equivalent amounts
+    const totalMonthlyBudget = items.reduce(
+      (sum, item) => sum + getMonthlyAmount(Number(item.amount), item.periodicity as Periodicity),
+      0,
+    );
+
     const { start: windowStart } = getMonthWindow(firstMonth);
     const { end: windowEnd } = getMonthWindow(lastMonth);
 
-    const { data: invoices, error } = await supabase
+    // Query invoices only for suppliers linked to selected budget items
+    let invoiceQuery = supabase
       .from('invoices')
       .select('gross_amount, issue_date')
       .eq('organization_id', organizationId)
@@ -61,6 +83,20 @@ export async function getBudgetMetrics(organizationId: string): Promise<BudgetMe
       .lte('issue_date', windowEnd)
       .is('deleted_at', null);
 
+    if (supplierIds.length > 0) {
+      invoiceQuery = invoiceQuery.in('supplier_id', supplierIds);
+    } else {
+      // No suppliers linked — no spend to count
+      const monthly: BudgetMonthData[] = months.map((month) => ({
+        month,
+        totalBudget: totalMonthlyBudget,
+        totalSpent: 0,
+        compliancePct: 0,
+      }));
+      return { monthly };
+    }
+
+    const { data: invoices, error } = await invoiceQuery;
     if (error) throw new Error(`Database error: ${error.message}`);
 
     // Group invoice spend by month
@@ -69,13 +105,6 @@ export async function getBudgetMetrics(organizationId: string): Promise<BudgetMe
       const key = monthKey(new Date(inv.issue_date));
       spendByMonth[key] = (spendByMonth[key] ?? 0) + (inv.gross_amount ?? 0);
     }
-
-    // Get total monthly budget from all active budget items
-    const items = await budgetItemDb.findAllByOrganization(organizationId);
-    const totalMonthlyBudget = items.reduce(
-      (sum, item) => sum + getMonthlyAmount(Number(item.amount), item.periodicity as Periodicity),
-      0,
-    );
 
     const monthly: BudgetMonthData[] = months.map((month) => {
       const totalSpent = spendByMonth[month] ?? 0;
