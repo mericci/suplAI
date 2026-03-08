@@ -1,0 +1,36 @@
+/**
+ * Budget service routes.
+ * All routes are nested under /api/organizations/:orgId/budget-items.
+ */
+
+import type { Router } from '../../lib/router.js';
+import {
+  listBudgetItemsHandler,
+  createBudgetItemHandler,
+  deleteBudgetItemHandler,
+  getBudgetMetricsHandler,
+} from './http/index.js';
+import { requireAuth } from '../../auth/middleware.js';
+
+export function registerBudgetRoutes(router: Router): void {
+  // Metrics must be registered before /:id to avoid "metrics" being matched as an ID
+  router.get(
+    '/api/organizations/:orgId/budget-items/metrics',
+    requireAuth(async (req) => getBudgetMetricsHandler(req)),
+  );
+
+  router.get(
+    '/api/organizations/:orgId/budget-items',
+    requireAuth(async (req) => listBudgetItemsHandler(req)),
+  );
+
+  router.post(
+    '/api/organizations/:orgId/budget-items',
+    requireAuth(async (req) => createBudgetItemHandler(req)),
+  );
+
+  router.delete(
+    '/api/organizations/:orgId/budget-items/:id',
+    requireAuth(async (req) => deleteBudgetItemHandler(req)),
+  );
+}
