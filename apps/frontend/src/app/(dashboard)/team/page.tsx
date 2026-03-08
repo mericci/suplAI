@@ -125,7 +125,7 @@ export default function TeamPage(): React.JSX.Element {
       ]);
 
       setData({
-        users: usersRes.success ? usersRes.data : [],
+        users: usersRes.success && usersRes.data ? usersRes.data.data : [],
         org: orgRes.success && orgRes.data ? orgRes.data : null,
         currentUserId: meRes.data.id,
       });
