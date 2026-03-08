@@ -205,6 +205,97 @@ export interface Database {
           deleted_at?: string | null;
         };
       };
+      supplier_documents: {
+        Row: {
+          id: string;
+          supplier_id: string;
+          file_name: string;
+          storage_path: string;
+          storage_bucket: string;
+          document_type: string | null;
+          service_category: string | null;
+          service_description: string | null;
+          tariff_type: string | null;
+          tariff_detail: string | null;
+          amounts: Json;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          supplier_id: string;
+          file_name: string;
+          storage_path: string;
+          storage_bucket?: string;
+          document_type?: string | null;
+          service_category?: string | null;
+          service_description?: string | null;
+          tariff_type?: string | null;
+          tariff_detail?: string | null;
+          amounts?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          supplier_id?: string;
+          file_name?: string;
+          storage_path?: string;
+          storage_bucket?: string;
+          document_type?: string | null;
+          service_category?: string | null;
+          service_description?: string | null;
+          tariff_type?: string | null;
+          tariff_detail?: string | null;
+          amounts?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
+      budget_items: {
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          description: string | null;
+          amount: number;
+          currency: string;
+          periodicity: 'monthly' | 'quarterly' | 'annual';
+          supplier_id: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          description?: string | null;
+          amount: number;
+          currency?: string;
+          periodicity?: 'monthly' | 'quarterly' | 'annual';
+          supplier_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          description?: string | null;
+          amount?: number;
+          currency?: string;
+          periodicity?: 'monthly' | 'quarterly' | 'annual';
+          supplier_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
     };
     Views: {
       // Add your view types here
