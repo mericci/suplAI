@@ -164,6 +164,22 @@ src/commons/
 └── time/               — Delay utility
 ```
 
+### Edge Function Parity (CRITICAL)
+
+The deployed backend is the **Supabase Edge Function** at `supabase/functions/`. The `src/` directory is local dev only — it is NOT deployed.
+
+**Rule: Every new endpoint added to `src/` MUST also be added to `supabase/functions/_shared/` in the same task, before committing.**
+
+Checklist when adding a new service or endpoint:
+1. Port the service to `supabase/functions/_shared/services/[name]/` (same structure: actions/, handlers/, http/, types/, routes.ts)
+2. Add any new DB table types to `supabase/functions/_shared/types/supabase.ts`
+3. Add any new DB queries to `supabase/functions/_shared/db/[table].db.ts`
+4. Register routes in `supabase/functions/_shared/router-setup.ts`
+5. Use `.ts` extensions (not `.js`) in all edge function imports
+6. Use `import { z } from 'zod'` (same as other edge function schemas)
+
+Failure to do this causes "Route not found" in production even though the endpoint works locally.
+
 ### Key Conventions
 
 - All imports use `.js` extensions (ESM + TypeScript bundler resolution)
