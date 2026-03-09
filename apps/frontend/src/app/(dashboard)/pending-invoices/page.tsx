@@ -50,6 +50,8 @@ import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/supplier
 import type { Supplier } from '@/integrations/backend/suppliers';
 import { getOrganization } from '@/integrations/backend/organizations';
 import { approveInvoice, rejectInvoice } from '@/integrations/backend/invoices';
+import { getInvoiceBudgetStatuses } from '@/integrations/backend/budget';
+import type { InvoiceBudgetStatus } from '@/integrations/backend/budget';
 import { syncInvoices } from '@/services/invoice-service';
 import { cn } from '@/lib/utils';
 
@@ -255,6 +257,43 @@ function MeritCell({ issueDate, status }: MeritCellProps): React.JSX.Element {
   );
 }
 
+interface BudgetStatusCellProps {
+  invoiceId: string;
+  budgetStatuses: Record<string, InvoiceBudgetStatus>;
+}
+
+function BudgetStatusCell({ invoiceId, budgetStatuses }: BudgetStatusCellProps): React.JSX.Element {
+  const budgetStatus = budgetStatuses[invoiceId];
+  if (!budgetStatus || budgetStatus.status === 'no_budget') {
+    return <span className="text-sm text-muted-foreground">—</span>;
+  }
+  const exceeds = budgetStatus.status === 'exceeds';
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            className={cn(
+              'whitespace-nowrap cursor-default',
+              exceeds
+                ? 'bg-red-100 text-red-800 border-red-200'
+                : 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            )}
+          >
+            {exceeds ? 'Supera presupuesto' : 'En presupuesto'}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[240px]">
+          <p className="text-xs">
+            {`Presupuesto: ${formatCLP(budgetStatus.budgetAmount)} — Gastado antes: ${formatCLP(budgetStatus.spentBefore)}`}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Page component                                                      */
 /* ------------------------------------------------------------------ */
@@ -276,6 +315,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(cachedLastSyncAt);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [budgetStatuses, setBudgetStatuses] = useState<Record<string, InvoiceBudgetStatus>>({});
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = (value: string): void => {
@@ -328,6 +368,20 @@ export default function PendingInvoicesPage(): React.JSX.Element {
     };
     loadSuppliers();
   }, [getOrgId]);
+
+  // After each invoice load, fetch accurate per-invoice budget statuses from the backend
+  useEffect(() => {
+    if (invoices.length === 0) return;
+    const fetchBudgetStatuses = async (): Promise<void> => {
+      const orgId = await getOrgId();
+      if (!orgId) return;
+      const ids = invoices.map((inv) => inv.id);
+      const res = await getInvoiceBudgetStatuses(orgId, ids);
+      if (res.success && res.data) setBudgetStatuses(res.data);
+    };
+    fetchBudgetStatuses();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices]);
 
   // Load org metadata (lastSiiSyncAt)
   useEffect(() => {
@@ -649,6 +703,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                     <TableHead className="min-w-[200px]">Proveedor</TableHead>
                     <TableHead>Tipo Documento</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="hidden lg:table-cell">Presupuesto</TableHead>
                     <TableHead className="hidden lg:table-cell text-center">
                       <TooltipProvider>
                         <Tooltip>
@@ -686,6 +741,12 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <BudgetStatusCell
+                          invoiceId={inv.id}
+                          budgetStatuses={budgetStatuses}
+                        />
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-center">
                         <MeritCell issueDate={inv.issueDate} status={inv.status} />
@@ -733,7 +794,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                         No se encontraron facturas
                       </TableCell>
                     </TableRow>
@@ -787,6 +848,10 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                     <Badge variant="outline" className={cn('text-xs', statusClasses(inv.status))}>
                       {statusLabel(inv.status)}
                     </Badge>
+                    <BudgetStatusCell
+                      invoiceId={inv.id}
+                      budgetStatuses={budgetStatuses}
+                    />
                   </div>
                   <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
