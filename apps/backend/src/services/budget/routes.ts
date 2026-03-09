@@ -9,14 +9,20 @@ import {
   createBudgetItemHandler,
   deleteBudgetItemHandler,
   getBudgetMetricsHandler,
+  getInvoiceBudgetStatusesHandler,
 } from './http/index.js';
 import { requireAuth } from '../../auth/middleware.js';
 
 export function registerBudgetRoutes(router: Router): void {
-  // Metrics must be registered before /:id to avoid "metrics" being matched as an ID
+  // Static sub-paths must be registered before /:id to avoid being matched as an ID
   router.get(
     '/api/organizations/:orgId/budget-items/metrics',
     requireAuth(async (req) => getBudgetMetricsHandler(req)),
+  );
+
+  router.get(
+    '/api/organizations/:orgId/budget-items/invoice-statuses',
+    requireAuth(async (req) => getInvoiceBudgetStatusesHandler(req)),
   );
 
   router.get(
