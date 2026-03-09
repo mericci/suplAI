@@ -23,6 +23,7 @@ import getSiiInvoices from '../../sii/actions/get-sii-invoices.js';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.js';
 import { upsertOrgSupplier } from './upsert-org-supplier.js';
 import { upsertInvoice } from './upsert-invoice.js';
+import { validatePendingInvoicesSiiStatus } from './validate-pending-invoices-sii-status.js';
 
 function currentPeriod(): string {
   const now = new Date();
@@ -65,7 +66,7 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
     const password = decrypt(org.tax_authority_password_enc);
     const { dni, dv } = parseChileanRut(org.tax_identifier);
 
-    const { invoices } = await getSiiInvoices({
+    const { invoices, siiToken } = await getSiiInvoices({
       taxPayerDni: dni,
       taxPayerDv: dv,
       password,
@@ -104,6 +105,9 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
         grossAmount: invoice.grossAmount,
       });
     }
+
+    // Validate SII event status for all pending invoices
+    await validatePendingInvoicesSiiStatus(orgId, siiToken);
 
     // Record the time of this successful sync
     await supabase
