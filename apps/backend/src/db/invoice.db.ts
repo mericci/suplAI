@@ -132,6 +132,23 @@ export async function findLatestByOrganization(
 }
 
 /**
+ * Find all active invoices with status 'pending' for an organization.
+ */
+export async function findPendingByOrganization(
+  organizationId: string,
+): Promise<Invoice[]> {
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('status', 'pending')
+    .is('deleted_at', null);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return data ?? [];
+}
+
+/**
  * List active invoices for an organization with optional filters and pagination.
  */
 export async function findAllByOrganization(

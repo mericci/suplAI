@@ -16,6 +16,7 @@ import { parseChileanRut } from '../../sii/helpers/parse-rut.js';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.js';
 import { upsertInvoice } from './upsert-invoice.js';
 import { upsertOrgSupplier } from './upsert-org-supplier.js';
+import { validatePendingInvoicesSiiStatus } from './validate-pending-invoices-sii-status.js';
 
 export interface ImportOrgInvoicesParams {
   orgId: string;
@@ -49,7 +50,7 @@ export async function importOrgInvoices(
   const now = new Date();
   const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  const { invoices } = await getSiiInvoices({
+  const { invoices, siiToken } = await getSiiInvoices({
     taxPayerDni: dni,
     taxPayerDv: dv,
     password,
@@ -84,6 +85,8 @@ export async function importOrgInvoices(
       grossAmount: invoice.grossAmount,
     });
   }
+
+  await validatePendingInvoicesSiiStatus(orgId, siiToken);
 
   return invoices.length;
 }
