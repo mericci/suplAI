@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   ClockIcon,
   CheckCircleIcon,
+  ThumbsUpIcon,
   UsersIcon,
   Users2Icon,
   WalletIcon,
@@ -32,6 +33,7 @@ import type { UserProfile } from '@/integrations/backend/users';
 
 const navItems = [
   { label: 'Pendientes', href: '/pending-invoices', icon: ClockIcon },
+  { label: 'Aprobadas', href: '/approved-invoices', icon: ThumbsUpIcon },
   { label: 'Ya pagado', href: '/paid-invoices', icon: CheckCircleIcon },
   { label: 'Proveedores', href: '/providers', icon: UsersIcon },
   { label: 'Equipo', href: '/team', icon: Users2Icon },
