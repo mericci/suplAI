@@ -10,20 +10,18 @@ import { logger } from '../../../utils/logger.js';
 import * as supplierDb from '../../../db/supplier.db.js';
 import { validateUpsertSupplier } from '../../../db/schemas/index.js';
 import { getErrorMessage } from '../../../utils/error.js';
+import { normalizeRut } from '../../../utils/rut.js';
 import { toPublic } from '../types/index.js';
 import type { SupplierPublic } from '../types/index.js';
 
 export async function upsertSupplier(data: unknown): Promise<SupplierPublic> {
   try {
     const validated = validateUpsertSupplier(data);
+    const taxIdentifier = normalizeRut(validated.taxIdentifier);
 
-    logger.info('Upserting supplier', {
-      taxIdentifier: validated.taxIdentifier,
-    });
+    logger.info('Upserting supplier', { taxIdentifier });
 
-    const existing = await supplierDb.findByTaxIdentifier(
-      validated.taxIdentifier,
-    );
+    const existing = await supplierDb.findByTaxIdentifier(taxIdentifier);
 
     if (existing) {
       // Update legalName in case it changed
@@ -36,7 +34,7 @@ export async function upsertSupplier(data: unknown): Promise<SupplierPublic> {
 
     const supplier = await supplierDb.create({
       legal_name: validated.legalName,
-      tax_identifier: validated.taxIdentifier,
+      tax_identifier: taxIdentifier,
     });
 
     logger.info('Supplier created (upsert)', { supplierId: supplier.id });
