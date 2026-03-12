@@ -6,6 +6,7 @@ import {
   FilterIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  MoreHorizontalIcon,
   XIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -22,6 +23,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -33,6 +40,7 @@ import type { Invoice } from '@/integrations/backend/sii';
 import { getMe } from '@/integrations/backend/users';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
+import { payInvoice } from '@/integrations/backend/invoices';
 
 const PAGE_SIZE = 10;
 
@@ -82,7 +90,7 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-export default function PaidInvoicesPage(): React.JSX.Element {
+export default function ApprovedInvoicesPage(): React.JSX.Element {
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -94,6 +102,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = (value: string): void => {
@@ -113,7 +122,6 @@ export default function PaidInvoicesPage(): React.JSX.Element {
     return cachedOrgId;
   }, []);
 
-  // Load suppliers for filter dropdown
   useEffect(() => {
     const loadSuppliers = async (): Promise<void> => {
       const orgId = await getOrgId();
@@ -139,7 +147,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
         const params: Parameters<typeof getOrgInvoices>[1] = {
           page: currentPage,
           limit: PAGE_SIZE,
-          status: 'paid',
+          status: 'approved',
         };
 
         if (appliedFilters.supplierId !== 'all') {
@@ -159,14 +167,13 @@ export default function PaidInvoicesPage(): React.JSX.Element {
         }
 
         const items = res.data.data;
-        const paginationData: Pagination = {
+        setPagination({
           page: currentPage,
           limit: PAGE_SIZE,
           total: res.data.pagination.total,
           totalPages: res.data.pagination.totalPages,
-        };
+        });
 
-        // Fetch missing supplier names
         const uniqueSupplierIds = [...new Set(items.map((inv) => inv.supplierId))];
         const uncachedIds = uniqueSupplierIds.filter((id) => !supplierNameCache.has(id));
         const results = await Promise.all(uncachedIds.map((id) => getSupplier(id)));
@@ -180,7 +187,6 @@ export default function PaidInvoicesPage(): React.JSX.Element {
         }));
 
         setInvoices(enriched);
-        setPagination(paginationData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al cargar facturas');
       } finally {
@@ -209,6 +215,23 @@ export default function PaidInvoicesPage(): React.JSX.Element {
     appliedFilters.amountValue !== '',
   ].filter(Boolean).length;
 
+  const handleMarkAsPaid = async (inv: EnrichedInvoice): Promise<void> => {
+    const orgId = await getOrgId();
+    if (!orgId) return;
+    setActionLoading(inv.id);
+    try {
+      await payInvoice(orgId, inv.id);
+      setInvoices((prev) => prev.filter((i) => i.id !== inv.id));
+      setPagination((p) => {
+        if (!p) return p;
+        const newTotal = p.total - 1;
+        return { ...p, total: newTotal, totalPages: Math.ceil(newTotal / PAGE_SIZE) };
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const filtered = invoices.filter(
     (inv) => !debouncedSearch
       || inv.supplierName.toLowerCase().includes(debouncedSearch.toLowerCase())
@@ -216,7 +239,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
 
-  const totalPaid = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
+  const totalApproved = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
 
   return (
     <div className="flex h-full flex-col">
@@ -224,14 +247,14 @@ export default function PaidInvoicesPage(): React.JSX.Element {
       <header className="flex items-center gap-2 border-b px-4 py-3">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-2 h-4" />
-        <h1 className="text-lg font-semibold">Ya pagado</h1>
+        <h1 className="text-lg font-semibold">Aprobadas</h1>
       </header>
 
       {/* Summary card */}
       <div className="flex gap-4 border-b px-4 py-3">
-        <div className="rounded-lg border bg-blue-50 px-4 py-2">
-          <p className="text-xs text-blue-700">Pagadas</p>
-          <p className="text-lg font-semibold text-blue-800">{formatCLP(totalPaid)}</p>
+        <div className="rounded-lg border bg-emerald-50 px-4 py-2">
+          <p className="text-xs text-emerald-700">Por pagar (aprobadas)</p>
+          <p className="text-lg font-semibold text-emerald-800">{formatCLP(totalApproved)}</p>
         </div>
       </div>
 
@@ -346,6 +369,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="hidden lg:table-cell text-center">Emisión</TableHead>
                     <TableHead className="hidden lg:table-cell text-center">Vencimiento</TableHead>
+                    <TableHead className="w-[60px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -373,12 +397,31 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                       <TableCell className="hidden lg:table-cell text-center">
                         <span className="text-sm">{formatDate(inv.dueDate)}</span>
                       </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              disabled={actionLoading === inv.id}
+                            >
+                              <MoreHorizontalIcon className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleMarkAsPaid(inv)}>
+                              Marcar como pagada
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
-                        No hay facturas pagadas
+                      <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                        No hay facturas aprobadas
                       </TableCell>
                     </TableRow>
                   )}
@@ -390,19 +433,38 @@ export default function PaidInvoicesPage(): React.JSX.Element {
             <div className="flex flex-col gap-3 p-4 md:hidden">
               {filtered.map((inv) => (
                 <div key={inv.id} className="rounded-lg border bg-card p-4 shadow-sm">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium">{inv.supplierName}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {inv.issuerTaxIdentifier}
-                      {' · N° '}
-                      {inv.documentNumber}
-                    </span>
+                  <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">{inv.supplierName}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {inv.issuerTaxIdentifier}
+                        {' · N° '}
+                        {inv.documentNumber}
+                      </span>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          disabled={actionLoading === inv.id}
+                        >
+                          <MoreHorizontalIcon className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleMarkAsPaid(inv)}>
+                          Marcar como pagada
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>
                     <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
                   </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
                     <span>
                       {'Emisión: '}
                       <strong>{formatDate(inv.issueDate)}</strong>
@@ -412,7 +474,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
               ))}
               {filtered.length === 0 && (
                 <p className="py-10 text-center text-muted-foreground">
-                  No hay facturas pagadas
+                  No hay facturas aprobadas
                 </p>
               )}
             </div>
