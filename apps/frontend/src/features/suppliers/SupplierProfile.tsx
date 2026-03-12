@@ -28,6 +28,7 @@ import { getMe } from '@/integrations/backend/users';
 import { getOrgInvoices } from '@/integrations/backend/sii/get-org-invoices';
 import { CreateSupplierSheet } from './CreateSupplierSheet';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
+import { formatRut } from '@/lib/rut';
 
 interface SupplierProfileProps {
   supplierId: string;
@@ -566,7 +567,7 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
               </div>
               <div>
                 <h1 className="text-xl font-bold">{supplier.legalName}</h1>
-                <p className="text-sm text-muted-foreground">RUT: {supplier.taxIdentifier}</p>
+                <p className="text-sm text-muted-foreground">RUT: {formatRut(supplier.taxIdentifier)}</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {documents.length === 0
                     ? 'Sin documentos asociados'

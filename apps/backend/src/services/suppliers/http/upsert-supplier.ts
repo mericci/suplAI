@@ -7,12 +7,16 @@ import {
   successResponse,
   validationError,
   serverError,
+  conflictResponse,
 } from '../../../utils/response.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import { HttpStatus, type RequestContext } from '../../../types/api.js';
 import { supabaseAdmin } from '../../../lib/supabase.js';
 import { upsertOrgSupplier } from '../../invoices/actions/upsert-org-supplier.js';
 import { logger } from '../../../utils/logger.js';
+import * as supplierDb from '../../../db/supplier.db.js';
+import { normalizeRut } from '../../../utils/rut.js';
+import { toPublic } from '../types/index.js';
 
 export async function upsertSupplierHandler(
   req: Request,
@@ -21,6 +25,16 @@ export async function upsertSupplierHandler(
   try {
     const body = await req.json();
     if (!body || typeof body !== 'object') return validationError('Invalid request body');
+
+    // Check for existing supplier before upserting — return 409 so the UI can
+    // prompt the user to go to the existing supplier profile instead of overwriting.
+    const rawRut = (body as Record<string, unknown>).taxIdentifier;
+    if (typeof rawRut === 'string' && rawRut.trim()) {
+      const existing = await supplierDb.findByTaxIdentifier(normalizeRut(rawRut));
+      if (existing) {
+        return conflictResponse('Supplier already exists', toPublic(existing));
+      }
+    }
 
     const supplier = await upsertSupplier(body);
 
