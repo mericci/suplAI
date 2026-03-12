@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/table';
 import { listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
+import { formatRut } from '@/lib/rut';
 import { getMe } from '@/integrations/backend/users';
 import { CreateSupplierSheet } from './CreateSupplierSheet';
 
@@ -223,7 +224,7 @@ export function SuppliersList(): React.JSX.Element {
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
-                          {supplier.taxIdentifier}
+                          {formatRut(supplier.taxIdentifier)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -260,7 +261,7 @@ export function SuppliersList(): React.JSX.Element {
                   <div className="flex flex-col gap-1">
                     <span className="font-medium">{supplier.legalName}</span>
                     <span className="text-xs text-muted-foreground">
-                      {supplier.taxIdentifier}
+                      {formatRut(supplier.taxIdentifier)}
                     </span>
                   </div>
                   <div className="mt-3 flex justify-between text-xs text-muted-foreground">
