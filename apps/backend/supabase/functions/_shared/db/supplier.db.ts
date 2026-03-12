@@ -8,6 +8,7 @@
 
 import { supabase, supabaseAdmin } from '../lib/supabase.ts';
 import type { Database } from '../types/supabase.ts';
+import { normalizeRut, formatRut } from '../utils/rut.ts';
 
 type Supplier = Database['public']['Tables']['suppliers']['Row'];
 type CreateSupplierInput = Database['public']['Tables']['suppliers']['Insert'];
@@ -42,15 +43,17 @@ export async function findById(id: string): Promise<Supplier | null> {
 export async function findByTaxIdentifier(
   taxIdentifier: string,
 ): Promise<Supplier | null> {
+  const normalized = normalizeRut(taxIdentifier);
+  const formatted = formatRut(taxIdentifier);
   const { data, error } = await supabase
     .from('suppliers')
     .select('*')
-    .eq('tax_identifier', taxIdentifier)
+    .or(`tax_identifier.eq.${normalized},tax_identifier.eq.${formatted}`)
     .is('deleted_at', null)
-    .single();
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
-    if (error.code === 'PGRST116') return null;
     throw new Error(`Database error: ${error.message}`);
   }
   return data;
@@ -216,8 +219,11 @@ export async function findAll(
   let dataQuery = supabase.from('suppliers').select('*').is('deleted_at', null);
 
   if (taxIdentifier) {
-    countQuery = countQuery.eq('tax_identifier', taxIdentifier);
-    dataQuery = dataQuery.eq('tax_identifier', taxIdentifier);
+    const normalized = normalizeRut(taxIdentifier);
+    const formatted = formatRut(taxIdentifier);
+    const filter = `tax_identifier.eq.${normalized},tax_identifier.eq.${formatted}`;
+    countQuery = countQuery.or(filter);
+    dataQuery = dataQuery.or(filter);
   } else if (search) {
     const pattern = `%${search}%`;
     countQuery = countQuery.or(

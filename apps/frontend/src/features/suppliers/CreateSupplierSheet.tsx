@@ -1,8 +1,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  PlusIcon, UploadIcon, FileIcon, XIcon, PlusCircleIcon, Loader2Icon,
+  PlusIcon, UploadIcon, FileIcon, XIcon, PlusCircleIcon, Loader2Icon, AlertTriangleIcon, ArrowRightIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,10 +21,11 @@ import {
   upsertSupplier,
   extractSupplierDocument,
   createSupplierDocument,
-  listSuppliers,
 } from '@/integrations/backend/suppliers';
 import type { ExtractedDocumentData, Supplier } from '@/integrations/backend/suppliers';
 import { createClient } from '@/lib/supabase/client';
+import { formatRut } from '@/lib/rut';
+import { HttpError } from '@/lib/http';
 
 type Status = 'idle' | 'extracting' | 'loading' | 'success' | 'error';
 type Step = 'upload' | 'form';
@@ -82,6 +84,7 @@ export function CreateSupplierSheet({
   supplier: presetSupplier,
   trigger,
 }: CreateSupplierSheetProps): React.JSX.Element {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('upload');
   const [status, setStatus] = useState<Status>('idle');
@@ -249,19 +252,10 @@ export function CreateSupplierSheet({
 
       // Step 1: upsert supplier (only if not pre-scoped)
       if (!supplierId) {
-        // Duplicate RUT check: prevent silently updating an existing supplier
         const cleanedRut = fields.taxIdentifier.trim().replace(/\./g, '');
-        const lookupRes = await listSuppliers({ taxIdentifier: cleanedRut, limit: 1 });
-        if (lookupRes.success && lookupRes.data && lookupRes.data.length > 0) {
-          const existing = lookupRes.data[0];
-          setDuplicateSupplier(existing);
-          setStatus('idle');
-          return;
-        }
-
         const res = await upsertSupplier({
           legalName: fields.legalName.trim(),
-          taxIdentifier: fields.taxIdentifier.trim(),
+          taxIdentifier: cleanedRut,
         });
         if (!res.success || !res.data) {
           setApiError(res.error ?? 'Error al crear el proveedor');
@@ -324,6 +318,14 @@ export function CreateSupplierSheet({
 
       setStatus('success');
     } catch (err) {
+      if (err instanceof HttpError && err.status === 409) {
+        const existing = (err.details as { data?: Supplier } | undefined)?.data;
+        if (existing) {
+          setDuplicateSupplier(existing);
+          setStatus('idle');
+          return;
+        }
+      }
       setApiError(err instanceof Error ? err.message : 'Ocurrió un error inesperado');
       setStatus('error');
     }
@@ -377,7 +379,56 @@ export function CreateSupplierSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {status === 'success' && (
+        {duplicateSupplier && (
+          <div className="flex flex-1 flex-col justify-center gap-0 px-5 py-8">
+            {/* Warning card */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-6 dark:border-amber-800/40 dark:bg-amber-950/20">
+              {/* Icon */}
+              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+                <AlertTriangleIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+
+              {/* Heading */}
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Este proveedor ya existe
+              </p>
+
+              {/* Supplier info */}
+              <div className="mt-3 rounded-lg border border-amber-200/70 bg-white/60 px-3 py-2.5 dark:border-amber-800/30 dark:bg-black/20">
+                <p className="text-sm font-medium text-foreground">{duplicateSupplier.legalName}</p>
+                <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                  RUT {formatRut(duplicateSupplier.taxIdentifier)}
+                </p>
+              </div>
+
+              <p className="mt-3 text-xs text-amber-700/80 dark:text-amber-400/70">
+                Ya está registrado en el sistema. Puedes ir a su perfil para agregar documentos o información adicional.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-4 flex flex-col gap-2">
+              <Button
+                className="w-full"
+                onClick={() => {
+                  handleOpenChange(false);
+                  router.push(`/providers/${duplicateSupplier.id}`);
+                }}
+              >
+                Ir al perfil del proveedor
+                <ArrowRightIcon className="ml-2 h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => setDuplicateSupplier(null)}
+              >
+                Volver
+              </Button>
+            </div>
+          </div>
+        )}
+        {!duplicateSupplier && status === 'success' && (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-8 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
               <span className="text-2xl">✓</span>
@@ -407,7 +458,7 @@ export function CreateSupplierSheet({
             </div>
           </div>
         )}
-        {status !== 'success' && step === 'upload' && (
+        {!duplicateSupplier && status !== 'success' && step === 'upload' && (
           /* ── Step 1: Document upload ── */
           <div className="flex flex-1 flex-col overflow-hidden">
             <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
@@ -520,7 +571,7 @@ export function CreateSupplierSheet({
             </div>
           </div>
         )}
-        {status !== 'success' && step === 'form' && (
+        {!duplicateSupplier && status !== 'success' && step === 'form' && (
           /* ── Step 2: Review & edit form ── */
           <form onSubmit={handleSubmit} noValidate className="flex flex-1 flex-col overflow-hidden">
             <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
@@ -541,19 +592,6 @@ export function CreateSupplierSheet({
                   </table>
                   <p className="mt-2 text-xs text-amber-600">
                     Puedes continuar de todas formas o verificar que el documento sea correcto.
-                  </p>
-                </div>
-              )}
-
-              {duplicateSupplier && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  <p className="font-medium">Ya existe un proveedor con este RUT</p>
-                  <p className="mt-1 text-xs">
-                    RUT {duplicateSupplier.taxIdentifier}:{' '}
-                    <strong>{duplicateSupplier.legalName}</strong>
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Ingresa un RUT diferente o busca al proveedor existente en el listado.
                   </p>
                 </div>
               )}

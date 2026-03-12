@@ -81,3 +81,14 @@ export function notFoundResponse(resource = 'Resource'): Response {
 export function serverError(message = 'Internal server error'): Response {
   return errorResponse(message, HttpStatus.INTERNAL_SERVER_ERROR);
 }
+
+/**
+ * Create a 409 Conflict response, optionally including the conflicting resource data
+ */
+export function conflictResponse<T>(message: string, data?: T): Response {
+  const body = { success: false, error: message, ...(data !== undefined && { data }) };
+  return new Response(JSON.stringify(body), {
+    status: HttpStatus.CONFLICT,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
