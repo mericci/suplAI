@@ -9,7 +9,10 @@ export interface Invoice {
   documentNumber: string;
   issueDate: string;
   dueDate: string | null;
+  executiveTitleDate: string;
   status: 'pending' | 'approved' | 'rejected' | 'paid';
+  approvedByUserId: string | null;
+  approvedAt: string | null;
   netAmount: number | null;
   taxAmount: number | null;
   grossAmount: number | null;
