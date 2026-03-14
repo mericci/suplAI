@@ -67,7 +67,7 @@ interface Filters {
 }
 
 const DEFAULT_FILTERS: Filters = {
-  status: 'all',
+  status: 'pending',
   supplierId: 'all',
   amountOp: 'gte',
   amountValue: '',
@@ -491,7 +491,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   };
 
   const activeFilterCount = [
-    appliedFilters.status !== 'all',
+    appliedFilters.status !== DEFAULT_FILTERS.status,
     appliedFilters.supplierId !== 'all',
     appliedFilters.amountValue !== '',
   ].filter(Boolean).length;
@@ -533,6 +533,8 @@ export default function PendingInvoicesPage(): React.JSX.Element {
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
 
+  const totalPending = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -557,6 +559,14 @@ export default function PendingInvoicesPage(): React.JSX.Element {
           </Button>
         </div>
       </header>
+
+      {/* Summary card */}
+      <div className="flex gap-4 border-b px-4 py-3">
+        <div className="rounded-lg border bg-orange-50 px-4 py-2">
+          <p className="text-xs text-orange-700">Por revisar (pendientes)</p>
+          <p className="text-lg font-semibold text-orange-800">{formatCLP(totalPending)}</p>
+        </div>
+      </div>
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center">
