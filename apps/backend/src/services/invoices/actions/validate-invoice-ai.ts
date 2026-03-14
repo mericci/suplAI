@@ -20,6 +20,25 @@ function getAnthropicClient(): Anthropic {
   return new Anthropic({ apiKey });
 }
 
+async function getUfToCLPRate(): Promise<number | null> {
+  try {
+    const res = await fetch('https://mindicador.cl/api/uf');
+    if (!res.ok) return null;
+    const data = await res.json() as { serie: { valor: number }[] };
+    return data?.serie?.[0]?.valor ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function convertAmountToCLP(amount: number, currency: string, ufRate: number | null): { clp: number; label: string } {
+  const cur = currency?.toUpperCase();
+  if (cur === 'UF' && ufRate) {
+    return { clp: Math.round(amount * ufRate), label: `${amount} UF = ${Math.round(amount * ufRate)} CLP (1 UF = ${ufRate} CLP)` };
+  }
+  return { clp: amount, label: `${amount} ${currency ?? 'CLP'}` };
+}
+
 export async function validateInvoiceAi(
   invoiceId: string,
   organizationId: string,
@@ -36,8 +55,16 @@ export async function validateInvoiceAi(
       return;
     }
 
+    const ufRate = await getUfToCLPRate();
+
+    const convertedAmounts = contract.amounts.map((a: { amount: number; currency: string; concept?: string; frequency?: string }) => {
+      const { clp, label } = convertAmountToCLP(a.amount, a.currency, ufRate);
+      return { ...a, clp_equivalent: clp, label };
+    });
+
     const prompt = `You are an invoice validation assistant for a Chilean company.
 Compare the following invoice against the supplier's cost contract.
+All contract amounts have been converted to CLP for comparison.
 
 INVOICE:
 - Document type: ${invoice.document_type}
@@ -48,9 +75,11 @@ INVOICE:
 SUPPLIER COST CONTRACT:
 - Service description: ${contract.service_description ?? 'N/A'}
 - Tariff type: ${contract.tariff_type ?? 'N/A'}
-- Amounts: ${JSON.stringify(contract.amounts)}
+- Amounts (converted to CLP): ${JSON.stringify(convertedAmounts)}
+${ufRate ? `- UF rate used: 1 UF = ${ufRate} CLP` : ''}
 
-Allow ±5% tolerance on amounts. Respond ONLY with valid JSON (no markdown, no explanation):
+Allow ±5% tolerance when comparing the invoice gross amount against the contract clp_equivalent amounts.
+Respond ONLY with valid JSON (no markdown, no explanation):
 {"status": "ok", "notes": "<one sentence in Spanish>"} or {"status": "error", "notes": "<one sentence in Spanish>"}`;
 
     const message = await getAnthropicClient().messages.create({
