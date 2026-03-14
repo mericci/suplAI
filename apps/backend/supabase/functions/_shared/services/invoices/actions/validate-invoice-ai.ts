@@ -58,7 +58,8 @@ Allow ±5% tolerance on amounts. Respond ONLY with valid JSON (no markdown, no e
     const content = message.content[0];
     if (content.type !== 'text') throw new Error('Unexpected AI response type');
 
-    const parsed: { status: 'ok' | 'error'; notes: string } = JSON.parse(content.text);
+    const rawText = content.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const parsed: { status: 'ok' | 'error'; notes: string } = JSON.parse(rawText);
 
     await invoiceDb.update(invoiceId, organizationId, {
       ai_validation_status: parsed.status,
