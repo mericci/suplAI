@@ -40,6 +40,21 @@ function formatCLP(amount: number): string {
   }).format(amount);
 }
 
+const RESPALDO_CONFIG = {
+  none: { label: 'Sin respaldo', className: 'bg-gray-100 text-gray-600' },
+  manual_insight: { label: 'Insight manual', className: 'bg-amber-100 text-amber-700' },
+  validated_document: { label: 'Estructura validada', className: 'bg-green-100 text-green-700' },
+} as const;
+
+function RespaldoBadge({ type }: { type: 'none' | 'manual_insight' | 'validated_document' }): React.JSX.Element {
+  const config = RESPALDO_CONFIG[type];
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${config.className}`}>
+      {config.label}
+    </span>
+  );
+}
+
 const PAGE_SIZE = 10;
 
 // Session-scoped cache — survives re-renders and pagination, resets on full reload
@@ -208,6 +223,19 @@ export function SuppliersList(): React.JSX.Element {
                         </Tooltip>
                       </TooltipProvider>
                     </TableHead>
+                    <TableHead>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger className="inline-flex items-center gap-1 cursor-default">
+                            Respaldo
+                            <InfoIcon className="h-3 w-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[240px] text-center">
+                            Indica si el proveedor tiene documentación de respaldo. &quot;Estructura validada&quot; requiere un contrato de costo.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -237,11 +265,14 @@ export function SuppliersList(): React.JSX.Element {
                           {formatCLP(supplier.totalApprovedAmount)}
                         </span>
                       </TableCell>
+                      <TableCell>
+                        <RespaldoBadge type={supplier.respaldoType} />
+                      </TableCell>
                     </TableRow>
                   ))}
                   {suppliers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
                         No se encontraron proveedores
                       </TableCell>
                     </TableRow>
@@ -271,6 +302,9 @@ export function SuppliersList(): React.JSX.Element {
                   <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                     <span>Monto Aprobado</span>
                     <span>{formatCLP(supplier.totalApprovedAmount)}</span>
+                  </div>
+                  <div className="mt-2">
+                    <RespaldoBadge type={supplier.respaldoType} />
                   </div>
                 </div>
               ))}

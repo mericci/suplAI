@@ -17,7 +17,16 @@ type UpdateSupplierInput = Database['public']['Tables']['suppliers']['Update'];
 export type SupplierWithAmounts = Supplier & {
   totalInvoiceAmount: number;
   totalApprovedAmount: number;
+  respaldoType: 'none' | 'manual_insight' | 'validated_document';
 };
+
+function deriveRespaldoType(
+  docs: { document_role: string | null }[],
+): 'none' | 'manual_insight' | 'validated_document' {
+  if (docs.length === 0) return 'none';
+  if (docs.some((d) => d.document_role === 'cost_contract')) return 'validated_document';
+  return 'manual_insight';
+}
 
 /**
  * Find an active supplier by ID.
@@ -193,10 +202,32 @@ export async function findByOrganization(
     );
   }
 
+  // Step 4: Fetch supplier_documents for respaldo derivation
+  let respaldoMap: Record<string, { document_role: string | null }[]> = {};
+
+  if (pageSupplierIds.length > 0) {
+    const { data: docRows, error: docError } = await (supabase as any)
+      .from('supplier_documents')
+      .select('supplier_id, document_role')
+      .in('supplier_id', pageSupplierIds)
+      .is('deleted_at', null);
+
+    if (docError) throw new Error(`Database error: ${docError.message}`);
+
+    respaldoMap = ((docRows ?? []) as { supplier_id: string; document_role: string | null }[]).reduce<
+      Record<string, { document_role: string | null }[]>
+    >((acc, row) => {
+      if (!acc[row.supplier_id]) acc[row.supplier_id] = [];
+      acc[row.supplier_id].push({ document_role: row.document_role });
+      return acc;
+    }, {});
+  }
+
   const suppliers: SupplierWithAmounts[] = (data ?? []).map((s) => ({
     ...s,
     totalInvoiceAmount: totals[s.id]?.total ?? 0,
     totalApprovedAmount: totals[s.id]?.approved ?? 0,
+    respaldoType: deriveRespaldoType(respaldoMap[s.id] ?? []),
   }));
 
   return { suppliers, total: count ?? 0 };
