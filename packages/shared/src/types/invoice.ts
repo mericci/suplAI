@@ -16,4 +16,6 @@ export interface Invoice {
   netAmount: number | null;
   taxAmount: number | null;
   grossAmount: number | null;
+  aiValidationStatus: 'ok' | 'error' | null;
+  aiValidationNotes: string | null;
 }

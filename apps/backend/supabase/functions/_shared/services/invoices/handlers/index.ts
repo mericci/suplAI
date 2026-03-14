@@ -8,3 +8,4 @@ export { payInvoice } from './pay-invoice.ts';
 export { deleteInvoice } from './delete-invoice.ts';
 export { syncInvoices } from './sync-invoices.ts';
 export { importInvoices } from './import-invoices.ts';
+export { validateInvoice } from './validate-invoice.ts';

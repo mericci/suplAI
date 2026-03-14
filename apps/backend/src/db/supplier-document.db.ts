@@ -121,6 +121,26 @@ export async function findById(id: string): Promise<SupplierDocumentRow | null> 
 }
 
 /**
+ * Find the current cost contract for a supplier (is_current = true, document_role = 'cost_contract').
+ */
+export async function findCurrentCostContract(supplierId: string): Promise<SupplierDocumentRow | null> {
+  const { data, error } = await db
+    .from('supplier_documents')
+    .select('*')
+    .eq('supplier_id', supplierId)
+    .eq('document_role', 'cost_contract')
+    .eq('is_current', true)
+    .is('deleted_at', null)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Database error: ${error.message}`);
+  }
+  return data as SupplierDocumentRow;
+}
+
+/**
  * Soft-delete a document by ID.
  */
 export async function softDelete(id: string): Promise<void> {

@@ -154,6 +154,8 @@ export interface Database {
           net_amount: number | null;
           tax_amount: number | null;
           gross_amount: number | null;
+          ai_validation_status: 'ok' | 'error' | null;
+          ai_validation_notes: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -177,6 +179,8 @@ export interface Database {
           net_amount?: number | null;
           tax_amount?: number | null;
           gross_amount?: number | null;
+          ai_validation_status?: 'ok' | 'error' | null;
+          ai_validation_notes?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -200,6 +204,8 @@ export interface Database {
           net_amount?: number | null;
           tax_amount?: number | null;
           gross_amount?: number | null;
+          ai_validation_status?: 'ok' | 'error' | null;
+          ai_validation_notes?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;

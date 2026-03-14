@@ -17,6 +17,9 @@ import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.js';
 import { upsertInvoice } from './upsert-invoice.js';
 import { upsertOrgSupplier } from './upsert-org-supplier.js';
 import { validatePendingInvoicesSiiStatus } from './validate-pending-invoices-sii-status.js';
+import { validateInvoiceAi } from './validate-invoice-ai.js';
+import { logger } from '../../../utils/logger.js';
+import { getErrorMessage } from '../../../utils/error.js';
 
 export interface ImportOrgInvoicesParams {
   orgId: string;
@@ -69,7 +72,7 @@ export async function importOrgInvoices(
 
     await upsertOrgSupplier(orgId, supplier.id);
 
-    await upsertInvoice({
+    const upserted = await upsertInvoice({
       organizationId: orgId,
       supplierId: supplier.id,
       issuerTaxIdentifier: supplierTaxIdentifier,
@@ -84,6 +87,12 @@ export async function importOrgInvoices(
       taxAmount: invoice.taxAmount,
       grossAmount: invoice.grossAmount,
     });
+
+    if (upserted.status === 'pending' && upserted.aiValidationStatus === null) {
+      validateInvoiceAi(upserted.id, orgId).catch((err) => {
+        logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
+      });
+    }
   }
 
   await validatePendingInvoicesSiiStatus(orgId, siiToken);

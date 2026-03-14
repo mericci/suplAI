@@ -16,6 +16,9 @@ import { parseChileanRut } from '../../sii/helpers/parse-rut.ts';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.ts';
 import { upsertInvoice } from './upsert-invoice.ts';
 import { upsertOrgSupplier } from './upsert-org-supplier.ts';
+import { validateInvoiceAi } from './validate-invoice-ai.ts';
+import { logger } from '../../../utils/logger.ts';
+import { getErrorMessage } from '../../../utils/error.ts';
 
 export interface ImportOrgInvoicesParams {
   orgId: string;
@@ -68,7 +71,7 @@ export async function importOrgInvoices(
 
     await upsertOrgSupplier(orgId, supplier.id);
 
-    await upsertInvoice({
+    const upserted = await upsertInvoice({
       organizationId: orgId,
       supplierId: supplier.id,
       issuerTaxIdentifier: supplierTaxIdentifier,
@@ -83,6 +86,12 @@ export async function importOrgInvoices(
       taxAmount: invoice.taxAmount,
       grossAmount: invoice.grossAmount,
     });
+
+    if (upserted.status === 'pending' && upserted.aiValidationStatus === null) {
+      validateInvoiceAi(upserted.id, orgId).catch((err) => {
+        logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
+      });
+    }
   }
 
   return invoices.length;
