@@ -49,7 +49,7 @@ import { getMe } from '@/integrations/backend/users';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
 import { getOrganization } from '@/integrations/backend/organizations';
-import { approveInvoice, rejectInvoice } from '@/integrations/backend/invoices';
+import { approveInvoice, rejectInvoice, validateInvoice } from '@/integrations/backend/invoices';
 import { getInvoiceBudgetStatuses } from '@/integrations/backend/budget';
 import type { InvoiceBudgetStatus } from '@/integrations/backend/budget';
 import { syncInvoices } from '@/services/invoice-service';
@@ -83,16 +83,8 @@ const supplierNameCache = new Map<string, string>();
 /*  Types                                                               */
 /* ------------------------------------------------------------------ */
 
-type AiReview =
-  | 'Validado'
-  | 'Nuevo proveedor'
-  | 'Monto erróneo'
-  | 'Supera presupuesto'
-  | 'Error de revisión';
-
 interface EnrichedInvoice extends Invoice {
   supplierName: string;
-  aiReview: AiReview;
 }
 
 interface Pagination {
@@ -106,42 +98,38 @@ interface Pagination {
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-function seededRandom(seed: string): number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    // eslint-disable-next-line no-bitwise
-    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-    // eslint-disable-next-line no-bitwise
-    hash |= 0;
-  }
-  return Math.abs(hash);
+interface AiValidationBadgeProps {
+  status: 'ok' | 'error' | null;
+  notes: string | null;
 }
 
-function enrichInvoice(inv: Invoice, supplierName: string): EnrichedInvoice {
-  const seed = seededRandom(inv.id);
-  const aiOptions: AiReview[] = [
-    'Validado',
-    'Nuevo proveedor',
-    'Monto erróneo',
-    'Supera presupuesto',
-    'Error de revisión',
-  ];
-  return {
-    ...inv,
-    supplierName,
-    aiReview: aiOptions[seed % aiOptions.length],
-  };
-}
-
-function aiReviewClasses(review: AiReview): string {
-  switch (review) {
-    case 'Validado': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    case 'Nuevo proveedor': return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'Monto erróneo': return 'bg-red-100 text-red-800 border-red-200';
-    case 'Supera presupuesto': return 'bg-orange-100 text-orange-800 border-orange-200';
-    case 'Error de revisión': return 'bg-red-100 text-red-800 border-red-200';
-    default: return '';
-  }
+function AiValidationBadge({ status, notes }: AiValidationBadgeProps): React.JSX.Element {
+  if (status === null) return <span className="text-sm text-muted-foreground">—</span>;
+  const isOk = status === 'ok';
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            className={cn(
+              'whitespace-nowrap cursor-default',
+              isOk
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                : 'bg-red-100 text-red-800 border-red-200',
+            )}
+          >
+            {isOk ? 'IA: Válida' : 'IA: Revisar'}
+          </Badge>
+        </TooltipTrigger>
+        {notes && (
+          <TooltipContent side="top" className="max-w-[240px]">
+            <p className="text-xs">{notes}</p>
+          </TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 function statusClasses(status: Invoice['status']): string {
@@ -444,10 +432,10 @@ export default function PendingInvoicesPage(): React.JSX.Element {
           if (res.success && res.data) supplierNameCache.set(uncachedIds[i], res.data.legalName);
         });
 
-        const enriched = items.map((inv) => enrichInvoice(
-          inv,
-          supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier,
-        ));
+        const enriched = items.map((inv) => ({
+          ...inv,
+          supplierName: supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier,
+        }));
         setInvoices(enriched);
         setPagination(pag);
       } catch (err) {
@@ -521,6 +509,23 @@ export default function PendingInvoicesPage(): React.JSX.Element {
     try {
       await rejectInvoice(orgId, inv.id);
       setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, status: 'rejected' } : i));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleValidateAi = async (inv: EnrichedInvoice): Promise<void> => {
+    const orgId = await getOrgId();
+    if (!orgId) return;
+    setActionLoading(inv.id);
+    try {
+      const result = await validateInvoice(orgId, inv.id);
+      if (result.success && result.data) {
+        const { aiValidationStatus, aiValidationNotes } = result.data;
+        setInvoices((prev) => prev.map((i) => (
+          i.id === inv.id ? { ...i, aiValidationStatus, aiValidationNotes } : i
+        )));
+      }
     } finally {
       setActionLoading(null);
     }
@@ -765,9 +770,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         <span className="text-sm">{formatDate(inv.issueDate)}</span>
                       </TableCell>
                       <TableCell className="hidden xl:table-cell">
-                        <Badge variant="outline" className={cn('whitespace-nowrap', aiReviewClasses(inv.aiReview))}>
-                          {inv.aiReview}
-                        </Badge>
+                        <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} />
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn('whitespace-nowrap', statusClasses(inv.status))}>
@@ -797,6 +800,9 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                                 </DropdownMenuItem>
                               </>
                             )}
+                            <DropdownMenuItem onClick={() => handleValidateAi(inv)}>
+                              Re-validar con IA
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -844,6 +850,9 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                             <DropdownMenuItem onClick={() => handleReject(inv)}>Rechazar</DropdownMenuItem>
                           </>
                         )}
+                        <DropdownMenuItem onClick={() => handleValidateAi(inv)}>
+                          Re-validar con IA
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -852,9 +861,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                     <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge variant="outline" className={cn('text-xs', aiReviewClasses(inv.aiReview))}>
-                      {inv.aiReview}
-                    </Badge>
+                    <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} />
                     <Badge variant="outline" className={cn('text-xs', statusClasses(inv.status))}>
                       {statusLabel(inv.status)}
                     </Badge>

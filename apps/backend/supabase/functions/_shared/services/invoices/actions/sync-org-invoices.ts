@@ -23,6 +23,7 @@ import getSiiInvoices from '../../sii/actions/get-sii-invoices.ts';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.ts';
 import { upsertOrgSupplier } from './upsert-org-supplier.ts';
 import { upsertInvoice } from './upsert-invoice.ts';
+import { validateInvoiceAi } from './validate-invoice-ai.ts';
 
 function currentPeriod(): string {
   const now = new Date();
@@ -88,7 +89,7 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
 
       await upsertOrgSupplier(orgId, supplier.id);
 
-      await upsertInvoice({
+      const upserted = await upsertInvoice({
         organizationId: orgId,
         supplierId: supplier.id,
         issuerTaxIdentifier: supplierTaxIdentifier,
@@ -103,6 +104,12 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
         taxAmount: invoice.taxAmount,
         grossAmount: invoice.grossAmount,
       });
+
+      if (upserted.status === 'pending' && upserted.aiValidationStatus === null) {
+        validateInvoiceAi(upserted.id, orgId).catch((err) => {
+          logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
+        });
+      }
     }
 
     // Record the time of this successful sync

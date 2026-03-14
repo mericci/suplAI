@@ -8,3 +8,4 @@ export { payInvoiceHandler } from './pay-invoice.js';
 export { deleteInvoiceHandler } from './delete-invoice.js';
 export { syncInvoicesHandler } from './sync-invoices.js';
 export { importInvoicesHandler } from './import-invoices.js';
+export { validateInvoiceHandler } from './validate-invoice.js';
