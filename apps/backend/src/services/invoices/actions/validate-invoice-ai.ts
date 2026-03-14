@@ -14,7 +14,11 @@ import * as supplierDocDb from '../../../db/supplier-document.db.js';
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/error.js';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+function getAnthropicClient(): Anthropic {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
+  return new Anthropic({ apiKey });
+}
 
 export async function validateInvoiceAi(
   invoiceId: string,
@@ -49,7 +53,7 @@ SUPPLIER COST CONTRACT:
 Allow ±5% tolerance on amounts. Respond ONLY with valid JSON (no markdown, no explanation):
 {"status": "ok", "notes": "<one sentence in Spanish>"} or {"status": "error", "notes": "<one sentence in Spanish>"}`;
 
-    const message = await anthropic.messages.create({
+    const message = await getAnthropicClient().messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 256,
       messages: [{ role: 'user', content: prompt }],
@@ -58,7 +62,8 @@ Allow ±5% tolerance on amounts. Respond ONLY with valid JSON (no markdown, no e
     const content = message.content[0];
     if (content.type !== 'text') throw new Error('Unexpected AI response type');
 
-    const parsed: { status: 'ok' | 'error'; notes: string } = JSON.parse(content.text);
+    const rawText = content.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const parsed: { status: 'ok' | 'error'; notes: string } = JSON.parse(rawText);
 
     await invoiceDb.update(invoiceId, organizationId, {
       ai_validation_status: parsed.status,
@@ -67,7 +72,7 @@ Allow ±5% tolerance on amounts. Respond ONLY with valid JSON (no markdown, no e
 
     logger.info('AI validation complete', { invoiceId, status: parsed.status });
   } catch (error) {
-    logger.warn('AI validation failed', { invoiceId, error: getErrorMessage(error) });
+    logger.error('AI validation failed', { invoiceId, error: getErrorMessage(error) });
     try {
       await invoiceDb.update(invoiceId, organizationId, {
         ai_validation_status: 'error',
