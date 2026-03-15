@@ -56,11 +56,18 @@ export async function validateInvoiceAi(
     }
 
     const ufRate = await getUfToCLPRate();
+    logger.info('AI validation context', {
+      invoiceId,
+      invoiceGrossAmount: invoice.gross_amount,
+      contractAmounts: contract.amounts,
+      ufRate,
+    });
 
     const convertedAmounts = contract.amounts.map((a: { amount: number; currency: string; concept?: string; frequency?: string }) => {
       const { clp, label } = convertAmountToCLP(a.amount, a.currency, ufRate);
       return { ...a, clp_equivalent: clp, label };
     });
+    logger.info('AI validation converted amounts', { invoiceId, convertedAmounts });
 
     const prompt = `You are an invoice validation assistant for a Chilean company.
 Compare the following invoice against the supplier's cost contract.
@@ -92,6 +99,7 @@ Respond ONLY with valid JSON (no markdown, no explanation):
     if (content.type !== 'text') throw new Error('Unexpected AI response type');
 
     const rawText = content.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    logger.info('AI raw response', { invoiceId, rawText });
     const parsed: { status: 'ok' | 'error'; notes: string } = JSON.parse(rawText);
 
     await invoiceDb.update(invoiceId, organizationId, {
