@@ -8,3 +8,5 @@ export { extractSupplierDocumentHandler } from './extract-supplier-document.js';
 export { createSupplierDocumentHandler } from './create-supplier-document.js';
 export { listSupplierDocumentsHandler } from './list-supplier-documents.js';
 export { getSupplierDocumentPreviewUrlHandler } from './get-supplier-document-preview-url.js';
+export { getSupplierPaymentInfoHandler } from './get-supplier-payment-info.js';
+export { upsertSupplierPaymentInfoHandler } from './upsert-supplier-payment-info.js';

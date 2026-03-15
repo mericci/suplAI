@@ -133,6 +133,50 @@ export interface Database {
           deleted_at?: string | null;
         };
       };
+      supplier_payment_info: {
+        Row: {
+          id: string;
+          supplier_id: string;
+          organization_id: string;
+          account_holder_name: string;
+          tax_identifier: string;
+          bank: string;
+          account_type: 'cuenta_corriente' | 'cuenta_vista' | 'cuenta_ahorro' | 'cuenta_rut';
+          account_number: string;
+          currency: 'CLP' | 'USD' | 'UF';
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          supplier_id: string;
+          organization_id: string;
+          account_holder_name: string;
+          tax_identifier: string;
+          bank: string;
+          account_type: 'cuenta_corriente' | 'cuenta_vista' | 'cuenta_ahorro' | 'cuenta_rut';
+          account_number: string;
+          currency?: 'CLP' | 'USD' | 'UF';
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          supplier_id?: string;
+          organization_id?: string;
+          account_holder_name?: string;
+          tax_identifier?: string;
+          bank?: string;
+          account_type?: 'cuenta_corriente' | 'cuenta_vista' | 'cuenta_ahorro' | 'cuenta_rut';
+          account_number?: string;
+          currency?: 'CLP' | 'USD' | 'UF';
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
       invoices: {
         Row: {
           id: string;

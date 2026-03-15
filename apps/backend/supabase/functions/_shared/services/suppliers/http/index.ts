@@ -8,3 +8,5 @@ export { extractSupplierDocumentHandler } from './extract-supplier-document.ts';
 export { createSupplierDocumentHandler } from './create-supplier-document.ts';
 export { listSupplierDocumentsHandler } from './list-supplier-documents.ts';
 export { getSupplierDocumentPreviewUrlHandler } from './get-supplier-document-preview-url.ts';
+export { getSupplierPaymentInfoHandler } from './get-supplier-payment-info.ts';
+export { upsertSupplierPaymentInfoHandler } from './upsert-supplier-payment-info.ts';

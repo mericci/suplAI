@@ -12,3 +12,7 @@ export type { CreateSupplierDocumentPayload } from './create-supplier-document';
 export { listSupplierDocuments } from './list-supplier-documents';
 export { getSupplierDocumentPreviewUrl } from './get-supplier-document-preview-url';
 export type { SupplierDocument, ExtractedDocumentData } from '@supl/shared';
+export { getSupplierPaymentInfo } from './get-supplier-payment-info';
+export { upsertSupplierPaymentInfo } from './upsert-supplier-payment-info';
+export type { UpsertSupplierPaymentInfoPayload } from './upsert-supplier-payment-info';
+export type { SupplierPaymentInfo } from '@supl/shared';
