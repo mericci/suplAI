@@ -6,6 +6,8 @@ import {
   FilterIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   XIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -48,6 +50,17 @@ const DEFAULT_FILTERS: Filters = {
   supplierId: 'all',
   amountOp: 'gte',
   amountValue: '',
+};
+
+type SortDirection = 'desc' | 'asc' | null;
+interface SortConfig { column: string | null; direction: SortDirection; }
+const DEFAULT_SORT: SortConfig = { column: null, direction: null };
+
+const COLUMN_TO_DB: Record<string, string> = {
+  tipo: 'document_type',
+  monto: 'gross_amount',
+  emision: 'issue_date',
+  vencimiento: 'due_date',
 };
 
 let cachedOrgId: string | null = null;
@@ -94,6 +107,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = (value: string): void => {
@@ -103,6 +117,15 @@ export default function PaidInvoicesPage(): React.JSX.Element {
       setCurrentPage(1);
       setDebouncedSearch(value);
     }, 350);
+  };
+
+  const handleSort = (column: string): void => {
+    setCurrentPage(1);
+    setSortConfig((prev) => {
+      if (prev.column !== column) return { column, direction: 'desc' };
+      if (prev.direction === 'desc') return { column, direction: 'asc' };
+      return DEFAULT_SORT;
+    });
   };
 
   const getOrgId = useCallback(async (): Promise<string | null> => {
@@ -136,9 +159,10 @@ export default function PaidInvoicesPage(): React.JSX.Element {
           return;
         }
 
+        const isProveedorSort = sortConfig.column === 'proveedor';
         const params: Parameters<typeof getOrgInvoices>[1] = {
-          page: currentPage,
-          limit: PAGE_SIZE,
+          page: isProveedorSort ? 1 : currentPage,
+          limit: isProveedorSort ? 500 : PAGE_SIZE,
           status: 'paid',
         };
 
@@ -151,6 +175,10 @@ export default function PaidInvoicesPage(): React.JSX.Element {
           else if (appliedFilters.amountOp === 'lte') params.grossAmountLte = amtVal;
           else params.grossAmountEq = amtVal;
         }
+        if (!isProveedorSort && sortConfig.column && sortConfig.direction) {
+          params.sortBy = COLUMN_TO_DB[sortConfig.column];
+          params.sortDir = sortConfig.direction;
+        }
 
         const res = await getOrgInvoices(orgId, params);
         if (!res.success || !res.data) {
@@ -159,12 +187,6 @@ export default function PaidInvoicesPage(): React.JSX.Element {
         }
 
         const items = res.data.data;
-        const paginationData: Pagination = {
-          page: currentPage,
-          limit: PAGE_SIZE,
-          total: res.data.pagination.total,
-          totalPages: res.data.pagination.totalPages,
-        };
 
         // Fetch missing supplier names
         const uniqueSupplierIds = [...new Set(items.map((inv) => inv.supplierId))];
@@ -174,13 +196,33 @@ export default function PaidInvoicesPage(): React.JSX.Element {
           if (r.success && r.data) supplierNameCache.set(uncachedIds[i], r.data.legalName);
         });
 
-        const enriched: EnrichedInvoice[] = items.map((inv) => ({
+        let enriched: EnrichedInvoice[] = items.map((inv) => ({
           ...inv,
           supplierName: supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier,
         }));
 
-        setInvoices(enriched);
-        setPagination(paginationData);
+        if (isProveedorSort && sortConfig.direction) {
+          enriched = enriched.sort((a, b) => {
+            const cmp = a.supplierName.localeCompare(b.supplierName, 'es');
+            return sortConfig.direction === 'asc' ? cmp : -cmp;
+          });
+          const start = (currentPage - 1) * PAGE_SIZE;
+          setInvoices(enriched.slice(start, start + PAGE_SIZE));
+          setPagination({
+            page: currentPage,
+            limit: PAGE_SIZE,
+            total: enriched.length,
+            totalPages: Math.ceil(enriched.length / PAGE_SIZE),
+          });
+        } else {
+          setInvoices(enriched);
+          setPagination({
+            page: currentPage,
+            limit: PAGE_SIZE,
+            total: res.data.pagination.total,
+            totalPages: res.data.pagination.totalPages,
+          });
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al cargar facturas');
       } finally {
@@ -189,7 +231,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
     };
 
     fetchInvoices();
-  }, [currentPage, appliedFilters, debouncedSearch, getOrgId]);
+  }, [currentPage, appliedFilters, debouncedSearch, getOrgId, sortConfig]);
 
   const handleApplyFilters = (): void => {
     setCurrentPage(1);
@@ -217,6 +259,13 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   );
 
   const totalPaid = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
+
+  function SortIcon({ column }: { column: string }): React.JSX.Element | null {
+    if (sortConfig.column !== column) return null;
+    return sortConfig.direction === 'desc'
+      ? <ChevronDownIcon className="inline h-3 w-3 ml-1" />
+      : <ChevronUpIcon className="inline h-3 w-3 ml-1" />;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -341,11 +390,26 @@ export default function PaidInvoicesPage(): React.JSX.Element {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">Proveedor</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="hidden lg:table-cell text-center">Emisión</TableHead>
-                    <TableHead className="hidden lg:table-cell text-center">Vencimiento</TableHead>
+                    <TableHead className="min-w-[200px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('proveedor')}>
+                      Proveedor
+                      <SortIcon column="proveedor" />
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('tipo')}>
+                      Tipo
+                      <SortIcon column="tipo" />
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('monto')}>
+                      Monto
+                      <SortIcon column="monto" />
+                    </TableHead>
+                    <TableHead className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('emision')}>
+                      Emisión
+                      <SortIcon column="emision" />
+                    </TableHead>
+                    <TableHead className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('vencimiento')}>
+                      Vencimiento
+                      <SortIcon column="vencimiento" />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
