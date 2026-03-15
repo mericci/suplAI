@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ChevronsUpDownIcon,
   XIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -109,6 +110,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSortChangeRef = useRef(false);
 
   const handleSearchChange = (value: string): void => {
     setSearch(value);
@@ -120,6 +122,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   };
 
   const handleSort = (column: string): void => {
+    isSortChangeRef.current = true;
     setCurrentPage(1);
     setSortConfig((prev) => {
       if (prev.column !== column) return { column, direction: 'desc' };
@@ -150,7 +153,9 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   useEffect(() => {
     const fetchInvoices = async (): Promise<void> => {
       try {
-        setLoading(true);
+        const isSortChange = isSortChangeRef.current;
+        isSortChangeRef.current = false;
+        if (!isSortChange) setLoading(true);
         setError(null);
 
         const orgId = await getOrgId();
@@ -260,11 +265,18 @@ export default function PaidInvoicesPage(): React.JSX.Element {
 
   const totalPaid = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
 
-  function SortIcon({ column }: { column: string }): React.JSX.Element | null {
-    if (sortConfig.column !== column) return null;
+  function SortIcon({ column }: { column: string }): React.JSX.Element {
+    if (sortConfig.column !== column) {
+      return <ChevronsUpDownIcon className="inline h-3.5 w-3.5 ml-1 text-muted-foreground/40" aria-hidden="true" />;
+    }
     return sortConfig.direction === 'desc'
-      ? <ChevronDownIcon className="inline h-3 w-3 ml-1" />
-      : <ChevronUpIcon className="inline h-3 w-3 ml-1" />;
+      ? <ChevronDownIcon className="inline h-4 w-4 ml-1 text-primary" aria-hidden="true" />
+      : <ChevronUpIcon className="inline h-4 w-4 ml-1 text-primary" aria-hidden="true" />;
+  }
+
+  function getSortAriaValue(col: string): 'ascending' | 'descending' | 'none' {
+    if (sortConfig.column !== col) return 'none';
+    return sortConfig.direction === 'asc' ? 'ascending' : 'descending';
   }
 
   return (
@@ -390,25 +402,40 @@ export default function PaidInvoicesPage(): React.JSX.Element {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('proveedor')}>
-                      Proveedor
-                      <SortIcon column="proveedor" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('proveedor')}
+                      className="min-w-[200px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('proveedor')}
+                    >
+                      Proveedor<SortIcon column="proveedor" />
                     </TableHead>
-                    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('tipo')}>
-                      Tipo
-                      <SortIcon column="tipo" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('tipo')}
+                      className="cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('tipo')}
+                    >
+                      Tipo<SortIcon column="tipo" />
                     </TableHead>
-                    <TableHead className="text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('monto')}>
-                      Monto
-                      <SortIcon column="monto" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('monto')}
+                      className="text-right cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('monto')}
+                    >
+                      Monto<SortIcon column="monto" />
                     </TableHead>
-                    <TableHead className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('emision')}>
-                      Emisión
-                      <SortIcon column="emision" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('emision')}
+                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('emision')}
+                    >
+                      Emisión<SortIcon column="emision" />
                     </TableHead>
-                    <TableHead className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('vencimiento')}>
-                      Vencimiento
-                      <SortIcon column="vencimiento" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('vencimiento')}
+                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('vencimiento')}
+                    >
+                      Vencimiento<SortIcon column="vencimiento" />
                     </TableHead>
                   </TableRow>
                 </TableHeader>
