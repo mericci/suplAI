@@ -163,6 +163,8 @@ export async function findAllByOrganization(
     grossAmountGte?: number;
     grossAmountLte?: number;
     grossAmountEq?: number;
+    sortBy?: string;
+    sortDir?: 'asc' | 'desc';
   } = {},
 ): Promise<{ invoices: Invoice[]; total: number }> {
   let countQuery = supabase
@@ -221,9 +223,11 @@ export async function findAllByOrganization(
   const { count, error: countError } = await countQuery;
   if (countError) throw new Error(`Database error: ${countError.message}`);
 
-  const { data, error } = await dataQuery
-    .range(offset, offset + limit - 1)
-    .order('issue_date', { ascending: false });
+  const orderedQuery = filters.sortBy
+    ? dataQuery.range(offset, offset + limit - 1).order(filters.sortBy, { ascending: filters.sortDir === 'asc' })
+    : dataQuery.range(offset, offset + limit - 1).order('issue_date', { ascending: false }).order('document_number', { ascending: false });
+
+  const { data, error } = await orderedQuery;
 
   if (error) throw new Error(`Database error: ${error.message}`);
 

@@ -31,6 +31,8 @@ export async function listInvoicesHandler(req: Request): Promise<Response> {
       limit: url.searchParams.has('limit')
         ? Number(url.searchParams.get('limit'))
         : undefined,
+      sortBy: url.searchParams.get('sortBy') ?? undefined,
+      sortDir: url.searchParams.get('sortDir') ?? undefined,
     };
 
     const result = await listInvoices(orgId, filters);

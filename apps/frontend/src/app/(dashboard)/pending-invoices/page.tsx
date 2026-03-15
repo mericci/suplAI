@@ -6,6 +6,9 @@ import {
   FilterIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ChevronsUpDownIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
   XIcon,
@@ -73,6 +76,18 @@ const DEFAULT_FILTERS: Filters = {
   supplierId: 'all',
   amountOp: 'gte',
   amountValue: '',
+};
+
+type SortDirection = 'desc' | 'asc' | null;
+interface SortConfig { column: string | null; direction: SortDirection; }
+const DEFAULT_SORT: SortConfig = { column: null, direction: null };
+
+const COLUMN_TO_DB: Record<string, string> = {
+  tipo: 'document_type',
+  monto: 'gross_amount',
+  emision: 'issue_date',
+  merito: 'executive_title_date',
+  ia: 'ai_validation_status',
 };
 
 // Session-scoped cache — persists across navigations, resets on full page reload
@@ -316,7 +331,9 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   const [aiLoadingId, setAiLoadingId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [budgetStatuses, setBudgetStatuses] = useState<Record<string, InvoiceBudgetStatus>>({});
+  const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSortChangeRef = useRef(false);
 
   const handleSearchChange = (value: string): void => {
     setSearch(value);
@@ -325,6 +342,16 @@ export default function PendingInvoicesPage(): React.JSX.Element {
       setCurrentPage(1);
       setDebouncedSearch(value);
     }, 350);
+  };
+
+  const handleSort = (column: string): void => {
+    isSortChangeRef.current = true;
+    setCurrentPage(1);
+    setSortConfig((prev) => {
+      if (prev.column !== column) return { column, direction: 'desc' };
+      if (prev.direction === 'desc') return { column, direction: 'asc' };
+      return DEFAULT_SORT;
+    });
   };
 
   const getOrgId = useCallback(async (): Promise<string | null> => {
@@ -401,7 +428,9 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   useEffect(() => {
     const fetchInvoices = async (): Promise<void> => {
       try {
-        setLoading(true);
+        const isSortChange = isSortChangeRef.current;
+        isSortChangeRef.current = false;
+        if (!isSortChange) setLoading(true);
         setError(null);
 
         const orgId = await getOrgId();
@@ -411,9 +440,10 @@ export default function PendingInvoicesPage(): React.JSX.Element {
         }
 
         // Build API params
+        const isProveedorSort = sortConfig.column === 'proveedor';
         const params: Parameters<typeof getOrgInvoices>[1] = {
-          page: currentPage,
-          limit: PAGE_SIZE,
+          page: isProveedorSort ? 1 : currentPage,
+          limit: isProveedorSort ? 500 : PAGE_SIZE,
         };
         if (appliedFilters.status !== 'all') {
           params.status = appliedFilters.status as Invoice['status'];
@@ -426,6 +456,10 @@ export default function PendingInvoicesPage(): React.JSX.Element {
           if (appliedFilters.amountOp === 'gte') params.grossAmountGte = amtVal;
           else if (appliedFilters.amountOp === 'lte') params.grossAmountLte = amtVal;
           else params.grossAmountEq = amtVal;
+        }
+        if (!isProveedorSort && sortConfig.column && sortConfig.direction) {
+          params.sortBy = COLUMN_TO_DB[sortConfig.column];
+          params.sortDir = sortConfig.direction;
         }
 
         const response = await getOrgInvoices(orgId, params);
@@ -444,12 +478,28 @@ export default function PendingInvoicesPage(): React.JSX.Element {
           if (res.success && res.data) supplierNameCache.set(uncachedIds[i], res.data.legalName);
         });
 
-        const enriched = items.map((inv) => ({
+        let enriched = items.map((inv) => ({
           ...inv,
           supplierName: supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier,
         }));
-        setInvoices(enriched);
-        setPagination(pag);
+
+        if (isProveedorSort && sortConfig.direction) {
+          enriched = enriched.sort((a, b) => {
+            const cmp = a.supplierName.localeCompare(b.supplierName, 'es');
+            return sortConfig.direction === 'asc' ? cmp : -cmp;
+          });
+          const start = (currentPage - 1) * PAGE_SIZE;
+          setInvoices(enriched.slice(start, start + PAGE_SIZE));
+          setPagination({
+            page: currentPage,
+            limit: PAGE_SIZE,
+            total: enriched.length,
+            totalPages: Math.ceil(enriched.length / PAGE_SIZE),
+          });
+        } else {
+          setInvoices(enriched);
+          setPagination(pag);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al cargar facturas');
       } finally {
@@ -459,7 +509,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
 
     fetchInvoices();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, appliedFilters, debouncedSearch, refreshKey, getOrgId]);
+  }, [currentPage, appliedFilters, debouncedSearch, refreshKey, getOrgId, sortConfig]);
 
   // Auto-sync once per session (survives tab switching, resets on full reload)
   useEffect(() => {
@@ -551,6 +601,20 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   );
 
   const totalPending = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
+
+  function SortIcon({ column }: { column: string }): React.JSX.Element {
+    if (sortConfig.column !== column) {
+      return <ChevronsUpDownIcon className="inline h-3.5 w-3.5 ml-1 text-muted-foreground/40" aria-hidden="true" />;
+    }
+    return sortConfig.direction === 'desc'
+      ? <ChevronDownIcon className="inline h-4 w-4 ml-1 text-primary" aria-hidden="true" />
+      : <ChevronUpIcon className="inline h-4 w-4 ml-1 text-primary" aria-hidden="true" />;
+  }
+
+  function getSortAriaValue(col: string): 'ascending' | 'descending' | 'none' {
+    if (sortConfig.column !== col) return 'none';
+    return sortConfig.direction === 'asc' ? 'ascending' : 'descending';
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -727,25 +791,66 @@ export default function PendingInvoicesPage(): React.JSX.Element {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">Proveedor</TableHead>
-                    <TableHead className="w-[180px]">Tipo Documento</TableHead>
-                    <TableHead className="w-[120px] text-right">Monto</TableHead>
-                    <TableHead className="hidden lg:table-cell w-[150px]">Presupuesto</TableHead>
-                    <TableHead className="hidden lg:table-cell w-[80px] text-center">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger className="inline-flex items-center gap-1 cursor-default">
-                            Mérito
-                            <InfoIcon className="h-3 w-3 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[220px] text-center">
-                            Días restantes hasta el título ejecutivo (fecha de emisión + 8 días).
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                    <TableHead
+                      aria-sort={getSortAriaValue('proveedor')}
+                      className="min-w-[200px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('proveedor')}
+                    >
+                      Proveedor<SortIcon column="proveedor" />
                     </TableHead>
-                    <TableHead className="hidden lg:table-cell w-[100px] text-center">Emisión</TableHead>
-                    <TableHead className="hidden xl:table-cell w-[120px] min-w-[120px]">Revisión IA</TableHead>
+                    <TableHead
+                      aria-sort={getSortAriaValue('tipo')}
+                      className="w-[180px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('tipo')}
+                    >
+                      Tipo Documento<SortIcon column="tipo" />
+                    </TableHead>
+                    <TableHead
+                      aria-sort={getSortAriaValue('monto')}
+                      className="w-[120px] text-right cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('monto')}
+                    >
+                      Monto<SortIcon column="monto" />
+                    </TableHead>
+                    <TableHead className="hidden lg:table-cell w-[150px]">Presupuesto</TableHead>
+                    <TableHead
+                      aria-sort={getSortAriaValue('merito')}
+                      className="hidden lg:table-cell w-[80px] text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('merito')}
+                    >
+                      <span className="inline-flex items-center justify-center gap-1">
+                        Mérito
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <InfoIcon
+                                className="h-3 w-3 text-muted-foreground cursor-help"
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label="Días restantes hasta el título ejecutivo"
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[220px] text-center">
+                              Días restantes hasta el título ejecutivo (fecha de emisión + 8 días).
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <SortIcon column="merito" />
+                      </span>
+                    </TableHead>
+                    <TableHead
+                      aria-sort={getSortAriaValue('emision')}
+                      className="hidden lg:table-cell w-[100px] text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('emision')}
+                    >
+                      Emisión<SortIcon column="emision" />
+                    </TableHead>
+                    <TableHead
+                      aria-sort={getSortAriaValue('ia')}
+                      className="hidden xl:table-cell w-[120px] min-w-[120px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('ia')}
+                    >
+                      Revisión IA<SortIcon column="ia" />
+                    </TableHead>
                     <TableHead className="w-[110px]">Estado</TableHead>
                     <TableHead className="w-[60px]">Acciones</TableHead>
                   </TableRow>

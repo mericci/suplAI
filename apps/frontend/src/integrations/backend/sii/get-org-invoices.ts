@@ -12,6 +12,8 @@ export interface GetOrgInvoicesParams {
   grossAmountGte?: number;
   grossAmountLte?: number;
   grossAmountEq?: number;
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
 }
 
 export async function getOrgInvoices(
