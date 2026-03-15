@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -51,6 +52,7 @@ export function PaymentInfoTab({
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +83,7 @@ export function PaymentInfoTab({
 
   function handleFieldChange(field: keyof UpsertSupplierPaymentInfoPayload, value: string): void {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setIsDirty(true);
     setSuccess(false);
     setError(null);
   }
@@ -112,6 +115,7 @@ export function PaymentInfoTab({
         return;
       }
       setSuccess(true);
+      setIsDirty(false);
     } catch {
       setError('Error al guardar la información de pago.');
     } finally {
@@ -133,8 +137,9 @@ export function PaymentInfoTab({
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Nombre del titular</label>
+          <Label htmlFor="payment-account-holder-name">Nombre del titular</Label>
           <Input
+            id="payment-account-holder-name"
             value={form.accountHolderName}
             onChange={(e) => handleFieldChange('accountHolderName', e.target.value)}
             placeholder="Nombre del titular de la cuenta"
@@ -142,8 +147,9 @@ export function PaymentInfoTab({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">RUT</label>
+          <Label htmlFor="payment-tax-identifier">RUT</Label>
           <Input
+            id="payment-tax-identifier"
             value={form.taxIdentifier}
             onChange={(e) => handleFieldChange('taxIdentifier', e.target.value)}
             placeholder="Ej: 76.543.210-K"
@@ -151,12 +157,12 @@ export function PaymentInfoTab({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Banco</label>
+          <Label htmlFor="payment-bank">Banco</Label>
           <Select
             value={form.bank}
             onValueChange={(value) => handleFieldChange('bank', value)}
           >
-            <SelectTrigger>
+            <SelectTrigger id="payment-bank">
               <SelectValue placeholder="Seleccionar banco" />
             </SelectTrigger>
             <SelectContent>
@@ -170,12 +176,12 @@ export function PaymentInfoTab({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Tipo de cuenta</label>
+          <Label htmlFor="payment-account-type">Tipo de cuenta</Label>
           <Select
             value={form.accountType}
             onValueChange={(value) => handleFieldChange('accountType', value as AccountTypeKey)}
           >
-            <SelectTrigger>
+            <SelectTrigger id="payment-account-type">
               <SelectValue placeholder="Seleccionar tipo de cuenta" />
             </SelectTrigger>
             <SelectContent>
@@ -189,8 +195,11 @@ export function PaymentInfoTab({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">N° de cuenta</label>
+          <Label htmlFor="payment-account-number">N° de cuenta</Label>
           <Input
+            id="payment-account-number"
+            inputMode="numeric"
+            maxLength={16}
             value={form.accountNumber}
             onChange={(e) => handleFieldChange('accountNumber', e.target.value)}
             placeholder="Número de cuenta"
@@ -198,12 +207,12 @@ export function PaymentInfoTab({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Moneda</label>
+          <Label htmlFor="payment-currency">Moneda</Label>
           <Select
             value={form.currency}
             onValueChange={(value) => handleFieldChange('currency', value as CurrencyKey)}
           >
-            <SelectTrigger>
+            <SelectTrigger id="payment-currency">
               <SelectValue placeholder="Seleccionar moneda" />
             </SelectTrigger>
             <SelectContent>
@@ -218,15 +227,19 @@ export function PaymentInfoTab({
       </div>
 
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <p role="alert" aria-live="polite" className="text-sm text-destructive">
+          {error}
+        </p>
       )}
 
       {success && (
-        <p className="text-sm text-green-600">Información de pago guardada correctamente.</p>
+        <p role="status" className="text-sm text-emerald-700">
+          Información de pago guardada correctamente.
+        </p>
       )}
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving || !isDirty}>
           {saving ? 'Guardando...' : 'Guardar'}
         </Button>
       </div>
