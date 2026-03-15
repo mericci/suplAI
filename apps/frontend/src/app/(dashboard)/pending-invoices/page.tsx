@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ChevronsUpDownIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
   XIcon,
@@ -332,6 +333,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   const [budgetStatuses, setBudgetStatuses] = useState<Record<string, InvoiceBudgetStatus>>({});
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSortChangeRef = useRef(false);
 
   const handleSearchChange = (value: string): void => {
     setSearch(value);
@@ -343,6 +345,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   };
 
   const handleSort = (column: string): void => {
+    isSortChangeRef.current = true;
     setCurrentPage(1);
     setSortConfig((prev) => {
       if (prev.column !== column) return { column, direction: 'desc' };
@@ -425,7 +428,9 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   useEffect(() => {
     const fetchInvoices = async (): Promise<void> => {
       try {
-        setLoading(true);
+        const isSortChange = isSortChangeRef.current;
+        isSortChangeRef.current = false;
+        if (!isSortChange) setLoading(true);
         setError(null);
 
         const orgId = await getOrgId();
@@ -597,11 +602,18 @@ export default function PendingInvoicesPage(): React.JSX.Element {
 
   const totalPending = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
 
-  function SortIcon({ column }: { column: string }): React.JSX.Element | null {
-    if (sortConfig.column !== column) return null;
+  function SortIcon({ column }: { column: string }): React.JSX.Element {
+    if (sortConfig.column !== column) {
+      return <ChevronsUpDownIcon className="inline h-3.5 w-3.5 ml-1 text-muted-foreground/40" aria-hidden="true" />;
+    }
     return sortConfig.direction === 'desc'
-      ? <ChevronDownIcon className="inline h-3 w-3 ml-1" />
-      : <ChevronUpIcon className="inline h-3 w-3 ml-1" />;
+      ? <ChevronDownIcon className="inline h-4 w-4 ml-1 text-primary" aria-hidden="true" />
+      : <ChevronUpIcon className="inline h-4 w-4 ml-1 text-primary" aria-hidden="true" />;
+  }
+
+  function getSortAriaValue(col: string): 'ascending' | 'descending' | 'none' {
+    if (sortConfig.column !== col) return 'none';
+    return sortConfig.direction === 'asc' ? 'ascending' : 'descending';
   }
 
   return (
@@ -779,40 +791,65 @@ export default function PendingInvoicesPage(): React.JSX.Element {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('proveedor')}>
-                      Proveedor
-                      <SortIcon column="proveedor" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('proveedor')}
+                      className="min-w-[200px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('proveedor')}
+                    >
+                      Proveedor<SortIcon column="proveedor" />
                     </TableHead>
-                    <TableHead className="w-[180px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('tipo')}>
-                      Tipo Documento
-                      <SortIcon column="tipo" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('tipo')}
+                      className="w-[180px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('tipo')}
+                    >
+                      Tipo Documento<SortIcon column="tipo" />
                     </TableHead>
-                    <TableHead className="w-[120px] text-right cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('monto')}>
-                      Monto
-                      <SortIcon column="monto" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('monto')}
+                      className="w-[120px] text-right cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('monto')}
+                    >
+                      Monto<SortIcon column="monto" />
                     </TableHead>
                     <TableHead className="hidden lg:table-cell w-[150px]">Presupuesto</TableHead>
-                    <TableHead className="hidden lg:table-cell w-[80px] text-center cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('merito')}>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger className="inline-flex items-center gap-1 cursor-pointer">
-                            Mérito
-                            <InfoIcon className="h-3 w-3 text-muted-foreground" />
-                            <SortIcon column="merito" />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[220px] text-center">
-                            Días restantes hasta el título ejecutivo (fecha de emisión + 8 días).
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                    <TableHead
+                      aria-sort={getSortAriaValue('merito')}
+                      className="hidden lg:table-cell w-[80px] text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('merito')}
+                    >
+                      <span className="inline-flex items-center justify-center gap-1">
+                        Mérito
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <InfoIcon
+                                className="h-3 w-3 text-muted-foreground cursor-help"
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label="Días restantes hasta el título ejecutivo"
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[220px] text-center">
+                              Días restantes hasta el título ejecutivo (fecha de emisión + 8 días).
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <SortIcon column="merito" />
+                      </span>
                     </TableHead>
-                    <TableHead className="hidden lg:table-cell w-[100px] text-center cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('emision')}>
-                      Emisión
-                      <SortIcon column="emision" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('emision')}
+                      className="hidden lg:table-cell w-[100px] text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('emision')}
+                    >
+                      Emisión<SortIcon column="emision" />
                     </TableHead>
-                    <TableHead className="hidden xl:table-cell w-[120px] min-w-[120px] cursor-pointer select-none hover:bg-muted/50" onClick={() => handleSort('ia')}>
-                      Revisión IA
-                      <SortIcon column="ia" />
+                    <TableHead
+                      aria-sort={getSortAriaValue('ia')}
+                      className="hidden xl:table-cell w-[120px] min-w-[120px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('ia')}
+                    >
+                      Revisión IA<SortIcon column="ia" />
                     </TableHead>
                     <TableHead className="w-[110px]">Estado</TableHead>
                     <TableHead className="w-[60px]">Acciones</TableHead>
