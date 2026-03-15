@@ -64,8 +64,12 @@ export const InvoiceListFiltersSchema = z.object({
   grossAmountLte: z.coerce.number().optional(),
   grossAmountEq: z.coerce.number().optional(),
   page: z.number().int().positive().default(1),
-  limit: z.number().int().positive().max(100)
-    .default(10),
+  limit: z.number().int().positive().max(500).default(10),
+  sortBy: z.enum([
+    'issue_date', 'gross_amount', 'document_type', 'document_number',
+    'approved_at', 'due_date', 'executive_title_date', 'ai_validation_status',
+  ]).optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
 });
 
 export type UpsertInvoiceInput = z.infer<typeof UpsertInvoiceSchema>;

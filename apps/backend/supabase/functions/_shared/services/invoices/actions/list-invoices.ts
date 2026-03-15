@@ -30,6 +30,8 @@ export async function listInvoices(
         grossAmountGte: filters.grossAmountGte,
         grossAmountLte: filters.grossAmountLte,
         grossAmountEq: filters.grossAmountEq,
+        sortBy: filters.sortBy,
+        sortDir: filters.sortDir,
       },
     );
 
