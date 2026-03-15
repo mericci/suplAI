@@ -14,6 +14,8 @@ import {
   createSupplierDocumentHandler,
   listSupplierDocumentsHandler,
   getSupplierDocumentPreviewUrlHandler,
+  getSupplierPaymentInfoHandler,
+  upsertSupplierPaymentInfoHandler,
 } from './http/index.ts';
 import { requireAuth } from '../../auth/middleware.ts';
 
@@ -54,5 +56,14 @@ export function registerSupplierRoutes(router: Router): void {
   router.get(
     '/api/suppliers/:supplierId/documents/:docId/preview-url',
     requireAuth(async (req) => getSupplierDocumentPreviewUrlHandler(req)),
+  );
+  // Supplier payment info
+  router.get(
+    '/api/organizations/:orgId/suppliers/:supplierId/payment-info',
+    requireAuth(async (req) => getSupplierPaymentInfoHandler(req)),
+  );
+  router.put(
+    '/api/organizations/:orgId/suppliers/:supplierId/payment-info',
+    requireAuth(async (req) => upsertSupplierPaymentInfoHandler(req)),
   );
 }

@@ -28,6 +28,7 @@ import { getMe } from '@/integrations/backend/users';
 import { getOrgInvoices } from '@/integrations/backend/sii/get-org-invoices';
 import { CreateSupplierSheet } from './CreateSupplierSheet';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
+import { PaymentInfoTab } from './PaymentInfoTab';
 import { formatRut } from '@/lib/rut';
 
 interface SupplierProfileProps {
@@ -451,6 +452,8 @@ function AdditionalDocsSection({
   );
 }
 
+type ProfileTab = 'documentos' | 'informacion_pago';
+
 export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX.Element {
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [documents, setDocuments] = useState<SupplierDocument[]>([]);
@@ -460,6 +463,8 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ProfileTab>('documentos');
 
   useEffect(() => {
     const fetchData = async (): Promise<void> => {
@@ -468,17 +473,16 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
         setError(null);
         setInvoicesLoading(true);
 
+        const meRes = await getMe();
+        const currentOrgId = meRes.success && meRes.data ? meRes.data.organization_id : null;
+        setOrgId(currentOrgId);
+
         const [supplierRes, docsRes, invoicesRes] = await Promise.all([
           getSupplier(supplierId),
           listSupplierDocuments(supplierId),
-          (async () => {
-            const meRes = await getMe();
-            if (!meRes.success || !meRes.data) return null;
-            return getOrgInvoices(meRes.data.organization_id, {
-              supplierId,
-              limit: 100,
-            });
-          })(),
+          currentOrgId
+            ? getOrgInvoices(currentOrgId, { supplierId, limit: 100 })
+            : Promise.resolve(null),
         ]);
 
         if (!supplierRes.success || !supplierRes.data) {
@@ -600,37 +604,84 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
 
           <Separator />
 
-          {/* Documents */}
-          {documents.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <FileTextIcon className="h-10 w-10 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-muted-foreground">
-                No hay documentos registrados para este proveedor
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Haz clic en &quot;Agregar documento&quot; para subir
-                {' '}contratos, boletas o cotizaciones.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-8">
-              {(() => {
-                const costDocs = documents.filter((d) => d.documentRole === 'cost_contract');
-                const additionalDocs = documents.filter((d) => d.documentRole === 'additional');
-                return (
-                  <>
-                    {costDocs.length > 0 && (
-                      <CostContractSection docs={costDocs} supplierId={supplierId} />
-                    )}
-                    {additionalDocs.length > 0 && (
+          {/* Tab navigation */}
+          <div className="flex gap-1 border-b">
+            <button
+              className={[
+                'px-4 py-2 text-sm font-medium transition-colors',
+                activeTab === 'documentos'
+                  ? 'border-b-2 border-foreground text-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+              onClick={() => setActiveTab('documentos')}
+            >
+              Documentos
+            </button>
+            <button
+              className={[
+                'px-4 py-2 text-sm font-medium transition-colors',
+                activeTab === 'informacion_pago'
+                  ? 'border-b-2 border-foreground text-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+              onClick={() => setActiveTab('informacion_pago')}
+            >
+              Información de pago
+            </button>
+          </div>
+
+          {/* Tab content */}
+          {activeTab === 'documentos' && (
+            <>
+              {documents.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-16 text-center">
+                  <FileTextIcon className="h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-sm font-medium text-muted-foreground">
+                    No hay documentos registrados para este proveedor
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Haz clic en &quot;Agregar documento&quot; para subir
+                    {' '}contratos, boletas o cotizaciones.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {(() => {
+                    const costDocs = documents.filter((d) => d.documentRole === 'cost_contract');
+                    const additionalDocs = documents.filter((d) => d.documentRole === 'additional');
+                    return (
                       <>
-                        {costDocs.length > 0 && <Separator />}
-                        <AdditionalDocsSection docs={additionalDocs} supplierId={supplierId} />
+                        {costDocs.length > 0 && (
+                          <CostContractSection docs={costDocs} supplierId={supplierId} />
+                        )}
+                        {additionalDocs.length > 0 && (
+                          <>
+                            {costDocs.length > 0 && <Separator />}
+                            <AdditionalDocsSection docs={additionalDocs} supplierId={supplierId} />
+                          </>
+                        )}
                       </>
-                    )}
-                  </>
-                );
-              })()}
+                    );
+                  })()}
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'informacion_pago' && orgId && (
+            <PaymentInfoTab
+              supplierId={supplierId}
+              orgId={orgId}
+              defaultAccountHolderName={supplier.legalName}
+              defaultTaxIdentifier={supplier.taxIdentifier}
+            />
+          )}
+
+          {activeTab === 'informacion_pago' && !orgId && (
+            <div className="flex flex-col items-center gap-2 py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                No se pudo determinar la organización actual.
+              </p>
             </div>
           )}
         </div>
