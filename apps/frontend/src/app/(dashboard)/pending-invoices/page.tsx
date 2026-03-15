@@ -11,6 +11,7 @@ import {
   XIcon,
   InfoIcon,
   LoaderCircleIcon,
+  AlertTriangleIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -108,13 +109,13 @@ interface AiValidationBadgeProps {
 function AiValidationBadge({ status, notes, loading }: AiValidationBadgeProps): React.JSX.Element {
   if (loading) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <LoaderCircleIcon className="h-3.5 w-3.5 animate-spin" />
+      <span className="inline-flex min-w-[90px] items-center gap-1.5 text-xs text-muted-foreground">
+        <LoaderCircleIcon className="h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
         Validando...
       </span>
     );
   }
-  if (status === null) return <span className="text-sm text-muted-foreground">—</span>;
+  if (status === null) return <span className="inline-flex min-w-[90px] items-center text-sm text-muted-foreground">—</span>;
   const isOk = status === 'ok';
   return (
     <TooltipProvider>
@@ -123,7 +124,7 @@ function AiValidationBadge({ status, notes, loading }: AiValidationBadgeProps): 
           <Badge
             variant="outline"
             className={cn(
-              'whitespace-nowrap cursor-default',
+              'inline-flex min-w-[90px] justify-center whitespace-nowrap cursor-default',
               isOk
                 ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
                 : 'bg-red-100 text-red-800 border-red-200',
@@ -246,7 +247,7 @@ function MeritCell({ issueDate, status }: MeritCellProps): React.JSX.Element {
         <TooltipTrigger asChild>
           <span className={cn('text-sm cursor-default', daysLeft <= 3 && 'font-semibold text-red-600')}>
             {daysLeft}
-            {' días'}
+            {daysLeft === 1 ? ' día' : ' días'}
           </span>
         </TooltipTrigger>
         <TooltipContent>Título ejecutivo el {executiveTitleDateStr(issueDate)}</TooltipContent>
@@ -312,6 +313,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(cachedLastSyncAt);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [aiLoadingId, setAiLoadingId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [budgetStatuses, setBudgetStatuses] = useState<Record<string, InvoiceBudgetStatus>>({});
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -527,7 +529,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   const handleValidateAi = async (inv: EnrichedInvoice): Promise<void> => {
     const orgId = await getOrgId();
     if (!orgId) return;
-    setActionLoading(inv.id);
+    setAiLoadingId(inv.id);
     try {
       const result = await validateInvoice(orgId, inv.id);
       if (result.success && result.data) {
@@ -537,7 +539,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
         )));
       }
     } finally {
-      setActionLoading(null);
+      setAiLoadingId(null);
     }
   };
 
@@ -569,7 +571,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
             disabled={syncing}
             className="gap-2"
           >
-            <RefreshCwIcon className={cn('h-4 w-4', syncing && 'animate-spin')} />
+            <RefreshCwIcon className={cn('h-4 w-4', syncing && 'animate-spin motion-reduce:animate-none')} />
             {syncing ? 'Sincronizando...' : 'Actualizar'}
           </Button>
         </div>
@@ -715,7 +717,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
           <>
             {syncFailed && (
               <div className="mx-4 mt-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                <span>⚠</span>
+                <AlertTriangleIcon className="h-4 w-4 shrink-0" />
                 <span>No se pudo sincronizar con el SII. Se muestran los datos guardados.</span>
               </div>
             )}
@@ -726,10 +728,10 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[200px]">Proveedor</TableHead>
-                    <TableHead>Tipo Documento</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="hidden lg:table-cell">Presupuesto</TableHead>
-                    <TableHead className="hidden lg:table-cell text-center">
+                    <TableHead className="w-[180px]">Tipo Documento</TableHead>
+                    <TableHead className="w-[120px] text-right">Monto</TableHead>
+                    <TableHead className="hidden lg:table-cell w-[150px]">Presupuesto</TableHead>
+                    <TableHead className="hidden lg:table-cell w-[80px] text-center">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger className="inline-flex items-center gap-1 cursor-default">
@@ -742,9 +744,9 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         </Tooltip>
                       </TooltipProvider>
                     </TableHead>
-                    <TableHead className="hidden lg:table-cell text-center">Emisión</TableHead>
-                    <TableHead className="hidden xl:table-cell">Revisión IA</TableHead>
-                    <TableHead>Estado</TableHead>
+                    <TableHead className="hidden lg:table-cell w-[100px] text-center">Emisión</TableHead>
+                    <TableHead className="hidden xl:table-cell w-[120px] min-w-[120px]">Revisión IA</TableHead>
+                    <TableHead className="w-[110px]">Estado</TableHead>
                     <TableHead className="w-[60px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -762,7 +764,16 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="whitespace-nowrap">{inv.documentType}</Badge>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className="max-w-[160px] block truncate whitespace-nowrap overflow-hidden cursor-default">
+                                {inv.documentType}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>{inv.documentType}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
@@ -779,8 +790,8 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                       <TableCell className="hidden lg:table-cell text-center">
                         <span className="text-sm">{formatDate(inv.issueDate)}</span>
                       </TableCell>
-                      <TableCell className="hidden xl:table-cell">
-                        <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={actionLoading === inv.id} />
+                      <TableCell className="hidden xl:table-cell w-[120px] min-w-[120px]">
+                        <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={aiLoadingId === inv.id} />
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn('whitespace-nowrap', statusClasses(inv.status))}>
@@ -794,6 +805,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
+                              aria-label={`Acciones para factura ${inv.documentNumber}`}
                               disabled={actionLoading === inv.id}
                             >
                               <MoreHorizontalIcon className="h-4 w-4" />
@@ -810,7 +822,10 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                                 </DropdownMenuItem>
                               </>
                             )}
-                            <DropdownMenuItem onClick={() => handleValidateAi(inv)}>
+                            <DropdownMenuItem
+                              onClick={() => handleValidateAi(inv)}
+                              disabled={actionLoading === inv.id || aiLoadingId === inv.id}
+                            >
                               Re-validar con IA
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -848,6 +863,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 shrink-0"
+                          aria-label={`Acciones para factura ${inv.documentNumber}`}
                           disabled={actionLoading === inv.id}
                         >
                           <MoreHorizontalIcon className="h-4 w-4" />
@@ -860,7 +876,10 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                             <DropdownMenuItem onClick={() => handleReject(inv)}>Rechazar</DropdownMenuItem>
                           </>
                         )}
-                        <DropdownMenuItem onClick={() => handleValidateAi(inv)}>
+                        <DropdownMenuItem
+                          onClick={() => handleValidateAi(inv)}
+                          disabled={actionLoading === inv.id || aiLoadingId === inv.id}
+                        >
                           Re-validar con IA
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -871,7 +890,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                     <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={actionLoading === inv.id} />
+                    <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={aiLoadingId === inv.id} />
                     <Badge variant="outline" className={cn('text-xs', statusClasses(inv.status))}>
                       {statusLabel(inv.status)}
                     </Badge>
