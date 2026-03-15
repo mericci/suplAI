@@ -1,0 +1,53 @@
+/**
+ * Upsert Supplier Payment Info Action
+ */
+
+import type { SupplierPaymentInfo } from '@supl/shared';
+import { logger } from '../../../utils/logger.js';
+import * as paymentInfoDb from '../../../db/supplier-payment-info.db.js';
+import { validateUpsertSupplierPaymentInfo } from '../../../db/schemas/supplier-payment-info.schema.js';
+import { getErrorMessage } from '../../../utils/error.js';
+
+function toPublic(row: paymentInfoDb.SupplierPaymentInfoRow): SupplierPaymentInfo {
+  return {
+    id: row.id,
+    supplierId: row.supplier_id,
+    organizationId: row.organization_id,
+    accountHolderName: row.account_holder_name,
+    taxIdentifier: row.tax_identifier,
+    bank: row.bank,
+    accountType: row.account_type,
+    accountNumber: row.account_number,
+    currency: row.currency,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function upsertSupplierPaymentInfo(
+  supplierId: string,
+  orgId: string,
+  input: unknown,
+): Promise<SupplierPaymentInfo> {
+  try {
+    logger.info('Upserting supplier payment info', { supplierId, orgId });
+
+    const validated = validateUpsertSupplierPaymentInfo(input);
+
+    const row = await paymentInfoDb.upsert({
+      supplier_id: supplierId,
+      organization_id: orgId,
+      account_holder_name: validated.accountHolderName,
+      tax_identifier: validated.taxIdentifier,
+      bank: validated.bank,
+      account_type: validated.accountType,
+      account_number: validated.accountNumber,
+      currency: validated.currency,
+    });
+
+    return toPublic(row);
+  } catch (error) {
+    logger.error('Error upserting supplier payment info', { error: getErrorMessage(error) });
+    throw error;
+  }
+}
