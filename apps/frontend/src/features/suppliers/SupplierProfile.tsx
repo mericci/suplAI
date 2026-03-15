@@ -26,6 +26,12 @@ import {
 import type { Supplier, SupplierDocument } from '@/integrations/backend/suppliers';
 import { getMe } from '@/integrations/backend/users';
 import { getOrgInvoices } from '@/integrations/backend/sii/get-org-invoices';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@/components/ui/tabs';
 import { CreateSupplierSheet } from './CreateSupplierSheet';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
 import { PaymentInfoTab } from './PaymentInfoTab';
@@ -452,8 +458,6 @@ function AdditionalDocsSection({
   );
 }
 
-type ProfileTab = 'documentos' | 'informacion_pago';
-
 export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX.Element {
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [documents, setDocuments] = useState<SupplierDocument[]>([]);
@@ -464,7 +468,6 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ProfileTab>('documentos');
 
   useEffect(() => {
     const fetchData = async (): Promise<void> => {
@@ -564,33 +567,19 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
           {/* Supplier info */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted">
-                <BuildingIcon className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">{supplier.legalName}</h1>
-                <p className="text-sm text-muted-foreground">RUT: {formatRut(supplier.taxIdentifier)}</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {documents.length === 0
-                    ? 'Sin documentos asociados'
-                    : `${documents.length} ${documents.length === 1 ? 'documento asociado' : 'documentos asociados'}`}
-                </p>
-              </div>
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted">
+              <BuildingIcon className="h-6 w-6 text-muted-foreground" />
             </div>
-
-            <CreateSupplierSheet
-              supplierId={supplierId}
-              supplier={supplier}
-              onSuccess={handleDocumentAdded}
-              trigger={
-                <Button size="sm">
-                  <PlusIcon className="h-4 w-4 mr-1.5" />
-                  Agregar documento
-                </Button>
-              }
-            />
+            <div>
+              <h1 className="text-xl font-bold">{supplier.legalName}</h1>
+              <p className="text-sm text-muted-foreground">RUT: {formatRut(supplier.taxIdentifier)}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {documents.length === 0
+                  ? 'Sin documentos asociados'
+                  : `${documents.length} ${documents.length === 1 ? 'documento asociado' : 'documentos asociados'}`}
+              </p>
+            </div>
           </div>
 
           <Separator />
@@ -604,35 +593,27 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
 
           <Separator />
 
-          {/* Tab navigation */}
-          <div className="flex gap-1 border-b">
-            <button
-              className={[
-                'px-4 py-2 text-sm font-medium transition-colors',
-                activeTab === 'documentos'
-                  ? 'border-b-2 border-foreground text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              ].join(' ')}
-              onClick={() => setActiveTab('documentos')}
-            >
-              Documentos
-            </button>
-            <button
-              className={[
-                'px-4 py-2 text-sm font-medium transition-colors',
-                activeTab === 'informacion_pago'
-                  ? 'border-b-2 border-foreground text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              ].join(' ')}
-              onClick={() => setActiveTab('informacion_pago')}
-            >
-              Información de pago
-            </button>
-          </div>
+          {/* Tabs */}
+          <Tabs defaultValue="documentos">
+            <TabsList>
+              <TabsTrigger value="documentos">Documentos</TabsTrigger>
+              <TabsTrigger value="informacion_pago">Información de pago</TabsTrigger>
+            </TabsList>
 
-          {/* Tab content */}
-          {activeTab === 'documentos' && (
-            <>
+            <TabsContent value="documentos" className="mt-6">
+              <div className="flex justify-end mb-4">
+                <CreateSupplierSheet
+                  supplierId={supplierId}
+                  supplier={supplier}
+                  onSuccess={handleDocumentAdded}
+                  trigger={
+                    <Button size="sm">
+                      <PlusIcon className="h-4 w-4 mr-1.5" />
+                      Agregar documento
+                    </Button>
+                  }
+                />
+              </div>
               {documents.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
                   <FileTextIcon className="h-10 w-10 text-muted-foreground/40" />
@@ -665,25 +646,25 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
                   })()}
                 </div>
               )}
-            </>
-          )}
+            </TabsContent>
 
-          {activeTab === 'informacion_pago' && orgId && (
-            <PaymentInfoTab
-              supplierId={supplierId}
-              orgId={orgId}
-              defaultAccountHolderName={supplier.legalName}
-              defaultTaxIdentifier={supplier.taxIdentifier}
-            />
-          )}
-
-          {activeTab === 'informacion_pago' && !orgId && (
-            <div className="flex flex-col items-center gap-2 py-16 text-center">
-              <p className="text-sm text-muted-foreground">
-                No se pudo determinar la organización actual.
-              </p>
-            </div>
-          )}
+            <TabsContent value="informacion_pago" className="mt-6">
+              {orgId ? (
+                <PaymentInfoTab
+                  supplierId={supplierId}
+                  orgId={orgId}
+                  defaultAccountHolderName={supplier.legalName}
+                  defaultTaxIdentifier={formatRut(supplier.taxIdentifier)}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-16 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No se pudo determinar la organización actual.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
