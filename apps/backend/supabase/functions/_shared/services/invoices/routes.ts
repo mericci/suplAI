@@ -15,6 +15,7 @@ import {
   deleteInvoiceHandler,
   syncInvoicesHandler,
   importInvoicesHandler,
+  validateInvoiceHandler,
 } from './http/index.ts';
 import { requireAuth } from '../../auth/middleware.ts';
 
@@ -71,6 +72,12 @@ export function registerInvoiceRoutes(router: Router): void {
   router.patch(
     '/api/organizations/:orgId/invoices/:id/pay',
     requireAuth(async (req) => payInvoiceHandler(req)),
+  );
+
+  // Validate an invoice with AI
+  router.patch(
+    '/api/organizations/:orgId/invoices/:id/validate',
+    requireAuth(async (req) => validateInvoiceHandler(req)),
   );
 
   // Soft-delete an invoice

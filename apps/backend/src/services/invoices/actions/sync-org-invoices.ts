@@ -24,6 +24,7 @@ import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.js';
 import { upsertOrgSupplier } from './upsert-org-supplier.js';
 import { upsertInvoice } from './upsert-invoice.js';
 import { validatePendingInvoicesSiiStatus } from './validate-pending-invoices-sii-status.js';
+import { validateInvoiceAi } from './validate-invoice-ai.js';
 
 function currentPeriod(): string {
   const now = new Date();
@@ -89,7 +90,7 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
 
       await upsertOrgSupplier(orgId, supplier.id);
 
-      await upsertInvoice({
+      const upserted = await upsertInvoice({
         organizationId: orgId,
         supplierId: supplier.id,
         issuerTaxIdentifier: supplierTaxIdentifier,
@@ -104,6 +105,12 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
         taxAmount: invoice.taxAmount,
         grossAmount: invoice.grossAmount,
       });
+
+      if (upserted.status === 'pending' && upserted.aiValidationStatus === null) {
+        validateInvoiceAi(upserted.id, orgId).catch((err) => {
+          logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
+        });
+      }
     }
 
     // Validate SII event status for all pending invoices

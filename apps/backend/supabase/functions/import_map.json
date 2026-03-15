@@ -5,6 +5,7 @@
     "http-status-codes": "npm:http-status-codes@2.3.0",
     "http-errors": "npm:http-errors@2.0.0",
     "axios": "npm:axios@1.13.5",
-    "@supl/shared": "../../../../packages/shared/src/index.ts"
+    "@supl/shared": "../../../../packages/shared/src/index.ts",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.36.3"
   }
 }
