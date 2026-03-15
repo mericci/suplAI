@@ -10,6 +10,7 @@ import {
   RefreshCwIcon,
   XIcon,
   InfoIcon,
+  LoaderCircleIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -101,9 +102,18 @@ interface Pagination {
 interface AiValidationBadgeProps {
   status: 'ok' | 'error' | null;
   notes: string | null;
+  loading?: boolean;
 }
 
-function AiValidationBadge({ status, notes }: AiValidationBadgeProps): React.JSX.Element {
+function AiValidationBadge({ status, notes, loading }: AiValidationBadgeProps): React.JSX.Element {
+  if (loading) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <LoaderCircleIcon className="h-3.5 w-3.5 animate-spin" />
+        Validando...
+      </span>
+    );
+  }
   if (status === null) return <span className="text-sm text-muted-foreground">—</span>;
   const isOk = status === 'ok';
   return (
@@ -770,7 +780,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         <span className="text-sm">{formatDate(inv.issueDate)}</span>
                       </TableCell>
                       <TableCell className="hidden xl:table-cell">
-                        <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} />
+                        <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={actionLoading === inv.id} />
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn('whitespace-nowrap', statusClasses(inv.status))}>
@@ -861,7 +871,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                     <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} />
+                    <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={actionLoading === inv.id} />
                     <Badge variant="outline" className={cn('text-xs', statusClasses(inv.status))}>
                       {statusLabel(inv.status)}
                     </Badge>
