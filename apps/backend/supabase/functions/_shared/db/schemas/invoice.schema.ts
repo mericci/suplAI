@@ -67,7 +67,7 @@ export const InvoiceListFiltersSchema = z.object({
   limit: z.number().int().positive().max(500).default(10),
   sortBy: z.enum([
     'issue_date', 'gross_amount', 'document_type', 'document_number',
-    'approved_at', 'due_date', 'executive_title_date', 'ai_validation_status',
+    'approved_at', 'paid_at', 'due_date', 'executive_title_date', 'ai_validation_status',
   ]).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
 });
