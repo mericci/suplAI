@@ -62,6 +62,8 @@ const COLUMN_TO_DB: Record<string, string> = {
   monto: 'gross_amount',
   emision: 'issue_date',
   vencimiento: 'due_date',
+  aprobacion: 'approved_at',
+  pago: 'paid_at',
 };
 
 let cachedOrgId: string | null = null;
@@ -437,6 +439,20 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                     >
                       Vencimiento<SortIcon column="vencimiento" />
                     </TableHead>
+                    <TableHead
+                      aria-sort={getSortAriaValue('aprobacion')}
+                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('aprobacion')}
+                    >
+                      F. Aprobación<SortIcon column="aprobacion" />
+                    </TableHead>
+                    <TableHead
+                      aria-sort={getSortAriaValue('pago')}
+                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('pago')}
+                    >
+                      F. Pago<SortIcon column="pago" />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -464,11 +480,17 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                       <TableCell className="hidden lg:table-cell text-center">
                         <span className="text-sm">{formatDate(inv.dueDate)}</span>
                       </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <span className="text-sm">{formatDate(inv.approvedAt)}</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <span className="text-sm">{formatDate(inv.paidAt)}</span>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                         No hay facturas pagadas
                       </TableCell>
                     </TableRow>
@@ -493,10 +515,18 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                     <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>
                     <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
                   </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
+                  <div className="mt-2 text-xs text-muted-foreground flex flex-col gap-0.5">
                     <span>
                       {'Emisión: '}
                       <strong>{formatDate(inv.issueDate)}</strong>
+                    </span>
+                    <span>
+                      {'F. Aprobación: '}
+                      <strong>{formatDate(inv.approvedAt)}</strong>
+                    </span>
+                    <span>
+                      {'F. Pago: '}
+                      <strong>{formatDate(inv.paidAt)}</strong>
                     </span>
                   </div>
                 </div>
