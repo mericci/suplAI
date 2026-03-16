@@ -13,6 +13,7 @@ export interface Invoice {
   status: 'pending' | 'approved' | 'rejected' | 'paid';
   approvedByUserId: string | null;
   approvedAt: string | null;
+  paidAt: string | null;
   netAmount: number | null;
   taxAmount: number | null;
   grossAmount: number | null;

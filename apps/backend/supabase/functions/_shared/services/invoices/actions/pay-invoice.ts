@@ -28,6 +28,7 @@ export async function payInvoice(
 
     const invoice = await invoiceDb.update(id, organizationId, {
       status: 'paid',
+      paid_at: new Date().toISOString(),
     } as never);
 
     logger.info('Invoice marked as paid', { invoiceId: id });
