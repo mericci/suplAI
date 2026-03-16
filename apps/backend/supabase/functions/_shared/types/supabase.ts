@@ -195,6 +195,7 @@ export interface Database {
           status: InvoiceStatus;
           approved_by_user_id: string | null;
           approved_at: string | null;
+          paid_at: string | null;
           net_amount: number | null;
           tax_amount: number | null;
           gross_amount: number | null;
@@ -220,6 +221,7 @@ export interface Database {
           status?: InvoiceStatus;
           approved_by_user_id?: string | null;
           approved_at?: string | null;
+          paid_at?: string | null;
           net_amount?: number | null;
           tax_amount?: number | null;
           gross_amount?: number | null;
@@ -245,6 +247,7 @@ export interface Database {
           status?: InvoiceStatus;
           approved_by_user_id?: string | null;
           approved_at?: string | null;
+          paid_at?: string | null;
           net_amount?: number | null;
           tax_amount?: number | null;
           gross_amount?: number | null;

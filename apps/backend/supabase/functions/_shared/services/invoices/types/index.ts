@@ -25,6 +25,7 @@ export interface InvoicePublic {
   status: InvoiceStatus;
   approvedByUserId: string | null;
   approvedAt: string | null;
+  paidAt: string | null;
   netAmount: number | null;
   taxAmount: number | null;
   grossAmount: number | null;
@@ -52,6 +53,7 @@ export function toPublic(invoice: InvoiceRow): InvoicePublic {
     status: invoice.status,
     approvedByUserId: invoice.approved_by_user_id,
     approvedAt: invoice.approved_at,
+    paidAt: invoice.paid_at,
     netAmount: invoice.net_amount,
     taxAmount: invoice.tax_amount,
     grossAmount: invoice.gross_amount,
