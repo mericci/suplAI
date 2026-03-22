@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  useEffect, useRef, useState, useCallback,
+} from 'react';
 import {
   SearchIcon,
   FilterIcon,
@@ -10,7 +12,11 @@ import {
   ChevronUpIcon,
   ChevronsUpDownIcon,
   XIcon,
+  FileTextIcon,
+  ReceiptIcon,
+  LoaderIcon,
 } from 'lucide-react';
+import type { NominaWithInvoiceIds } from '@supl/shared';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
@@ -31,13 +37,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Tabs, TabsList, TabsTrigger, TabsContent,
+} from '@/components/ui/tabs';
 import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
 import { getMe } from '@/integrations/backend/users';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
+import { listNominas } from '@/integrations/backend/nominas';
+import { createClient } from '@/lib/supabase/client';
+import { NOMINA_STATUS, NOMINA_STATUS_LABELS } from '@/features/nominas/constants';
 
 const PAGE_SIZE = 10;
+
+const PAID_TAB = {
+  FACTURAS: 'facturas',
+  NOMINAS: 'nominas',
+} as const;
 
 type AmountOp = 'gte' | 'lte' | 'eq';
 
@@ -80,6 +103,13 @@ interface Pagination {
   totalPages: number;
 }
 
+interface InvoiceDialogState {
+  open: boolean;
+  nomina: NominaWithInvoiceIds | null;
+  invoices: Invoice[];
+  loading: boolean;
+}
+
 function formatCLP(amount: number | null): string {
   if (amount === null) return '—';
   return new Intl.NumberFormat('es-CL', {
@@ -98,7 +128,15 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+async function openVoucherUrl(bucket: string, path: string): Promise<void> {
+  const supabase = createClient();
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
+  if (error || !data?.signedUrl) return;
+  window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+}
+
 export default function PaidInvoicesPage(): React.JSX.Element {
+  const [activeTab, setActiveTab] = useState<string>(PAID_TAB.FACTURAS);
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -111,6 +149,15 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
+  const [nominas, setNominas] = useState<NominaWithInvoiceIds[]>([]);
+  const [nominasLoading, setNominasLoading] = useState(false);
+  const [voucherLoading, setVoucherLoading] = useState<string | null>(null);
+  const [invoiceDialog, setInvoiceDialog] = useState<InvoiceDialogState>({
+    open: false,
+    nomina: null,
+    invoices: [],
+    loading: false,
+  });
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSortChangeRef = useRef(false);
 
@@ -141,15 +188,26 @@ export default function PaidInvoicesPage(): React.JSX.Element {
     return cachedOrgId;
   }, []);
 
-  // Load suppliers for filter dropdown
+  // Load suppliers and paid nominas on mount
   useEffect(() => {
-    const loadSuppliers = async (): Promise<void> => {
+    const init = async (): Promise<void> => {
       const orgId = await getOrgId();
       if (!orgId) return;
-      const res = await listSuppliersByOrg(orgId, { limit: 100 });
-      if (res.success) setSuppliers(res.data);
+
+      const suppliersRes = await listSuppliersByOrg(orgId, { limit: 100 });
+      if (suppliersRes.success) setSuppliers(suppliersRes.data);
+
+      setNominasLoading(true);
+      try {
+        const res = await listNominas(orgId);
+        if (res.success && res.data) {
+          setNominas(res.data.filter((n) => n.status === NOMINA_STATUS.PAID));
+        }
+      } finally {
+        setNominasLoading(false);
+      }
     };
-    loadSuppliers();
+    init();
   }, [getOrgId]);
 
   useEffect(() => {
@@ -195,7 +253,6 @@ export default function PaidInvoicesPage(): React.JSX.Element {
 
         const items = res.data.data;
 
-        // Fetch missing supplier names
         const uniqueSupplierIds = [...new Set(items.map((inv) => inv.supplierId))];
         const uncachedIds = uniqueSupplierIds.filter((id) => !supplierNameCache.has(id));
         const results = await Promise.all(uncachedIds.map((id) => getSupplier(id)));
@@ -253,6 +310,52 @@ export default function PaidInvoicesPage(): React.JSX.Element {
     setShowFilters(false);
   };
 
+  const handleViewVoucher = async (nomina: NominaWithInvoiceIds): Promise<void> => {
+    if (!nomina.voucherStorageBucket || !nomina.voucherStoragePath) return;
+    setVoucherLoading(nomina.id);
+    try {
+      await openVoucherUrl(nomina.voucherStorageBucket, nomina.voucherStoragePath);
+    } finally {
+      setVoucherLoading(null);
+    }
+  };
+
+  const handleViewInvoices = async (nomina: NominaWithInvoiceIds): Promise<void> => {
+    setInvoiceDialog({
+      open: true, nomina, invoices: [], loading: true,
+    });
+
+    const orgId = await getOrgId();
+    if (!orgId) {
+      setInvoiceDialog((s) => ({ ...s, loading: false }));
+      return;
+    }
+
+    // Fetch paid invoices that belong to this nomina
+    const fetched: Invoice[] = [];
+    let page = 1;
+    let hasMore = true;
+    while (hasMore && fetched.length < nomina.invoiceIds.length) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await getOrgInvoices(orgId, { page, limit: 500, status: 'paid' });
+      if (!res.success || !res.data) break;
+      fetched.push(...res.data.data.filter((inv) => nomina.invoiceIds.includes(inv.id)));
+      hasMore = page < res.data.pagination.totalPages;
+      page += 1;
+    }
+
+    // Resolve supplier names
+    const uncachedIds = [...new Set(fetched.map((inv) => inv.supplierId))].filter(
+      (id) => !supplierNameCache.has(id),
+    );
+    const supplierResults = await Promise.all(uncachedIds.map((id) => getSupplier(id)));
+    supplierResults.forEach((r, i) => {
+      if (r.success && r.data) supplierNameCache.set(uncachedIds[i], r.data.legalName);
+    });
+
+    setInvoiceDialog((s) => ({ ...s, loading: false, invoices: fetched }));
+  };
+
   const activeFilterCount = [
     appliedFilters.supplierId !== 'all',
     appliedFilters.amountValue !== '',
@@ -264,8 +367,6 @@ export default function PaidInvoicesPage(): React.JSX.Element {
       || inv.documentNumber.toLowerCase().includes(debouncedSearch.toLowerCase())
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
-
-  const totalPaid = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
 
   function SortIcon({ column }: { column: string }): React.JSX.Element {
     if (sortConfig.column !== column) {
@@ -290,285 +391,483 @@ export default function PaidInvoicesPage(): React.JSX.Element {
         <h1 className="text-lg font-semibold">Ya pagado</h1>
       </header>
 
-      {/* Summary card */}
-      <div className="flex gap-4 border-b px-4 py-3">
-        <div className="rounded-lg border bg-blue-50 px-4 py-2">
-          <p className="text-xs text-blue-700">Pagadas</p>
-          <p className="text-lg font-semibold text-blue-800">{formatCLP(totalPaid)}</p>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
+        <div className="border-b px-4 pt-2">
+          <TabsList variant="line">
+            <TabsTrigger value={PAID_TAB.FACTURAS}>Facturas Pagadas</TabsTrigger>
+            <TabsTrigger value={PAID_TAB.NOMINAS}>Nóminas</TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar proveedor o folio..."
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Button
-          variant="outline"
-          className="shrink-0 gap-2"
-          onClick={() => setShowFilters((v) => !v)}
-        >
-          <FilterIcon className="h-4 w-4" />
-          Filtrar
-          {activeFilterCount > 0 && (
-            <Badge className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-              {activeFilterCount}
-            </Badge>
-          )}
-        </Button>
-      </div>
-
-      {/* Filter panel */}
-      {showFilters && (
-        <div className="border-b bg-muted/30 px-4 py-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Proveedor</span>
-              <Select
-                value={filters.supplierId}
-                onValueChange={(v) => setFilters((f) => ({ ...f, supplierId: v }))}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Todos los proveedores" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los proveedores</SelectItem>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.legalName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* ── Facturas Pagadas tab ── */}
+        <TabsContent value={PAID_TAB.FACTURAS} className="flex flex-col flex-1 min-h-0">
+          {/* Toolbar */}
+          <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar proveedor o folio..."
+                value={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="pl-9"
+              />
             </div>
+            <Button
+              variant="outline"
+              className="shrink-0 gap-2"
+              onClick={() => setShowFilters((v) => !v)}
+            >
+              <FilterIcon className="h-4 w-4" />
+              Filtrar
+              {activeFilterCount > 0 && (
+                <Badge className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </div>
 
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Monto bruto</span>
-              <div className="flex gap-2">
-                <Select
-                  value={filters.amountOp}
-                  onValueChange={(v) => setFilters((f) => ({ ...f, amountOp: v as AmountOp }))}
-                >
-                  <SelectTrigger className="w-[110px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gte">&gt;=</SelectItem>
-                    <SelectItem value="lte">&lt;=</SelectItem>
-                    <SelectItem value="eq">=</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={filters.amountValue}
-                  onChange={(e) => setFilters((f) => ({ ...f, amountValue: e.target.value }))}
-                  className="w-[120px]"
-                />
+          {/* Filter panel */}
+          {showFilters && (
+            <div className="border-b bg-muted/30 px-4 py-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">Proveedor</span>
+                  <Select
+                    value={filters.supplierId}
+                    onValueChange={(v) => setFilters((f) => ({ ...f, supplierId: v }))}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Todos los proveedores" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los proveedores</SelectItem>
+                      {suppliers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.legalName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">Monto bruto</span>
+                  <div className="flex gap-2">
+                    <Select
+                      value={filters.amountOp}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, amountOp: v as AmountOp }))}
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gte">&gt;=</SelectItem>
+                        <SelectItem value="lte">&lt;=</SelectItem>
+                        <SelectItem value="eq">=</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={filters.amountValue}
+                      onChange={(e) => setFilters((f) => ({ ...f, amountValue: e.target.value }))}
+                      className="w-[120px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleApplyFilters}>Aplicar</Button>
+                  <Button size="sm" variant="ghost" onClick={handleClearFilters} className="gap-1">
+                    <XIcon className="h-3 w-3" />
+                    Limpiar
+                  </Button>
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleApplyFilters}>Aplicar</Button>
-              <Button size="sm" variant="ghost" onClick={handleClearFilters} className="gap-1">
-                <XIcon className="h-3 w-3" />
-                Limpiar
-              </Button>
+          {/* Content */}
+          <div className="flex-1 overflow-auto">
+            {loading && (
+              <div className="flex items-center justify-center py-20">
+                <p className="text-muted-foreground">Cargando facturas...</p>
+              </div>
+            )}
+            {error && (
+              <div className="flex items-center justify-center py-20">
+                <p className="text-destructive">{error}</p>
+              </div>
+            )}
+            {!loading && !error && (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead
+                          aria-sort={getSortAriaValue('proveedor')}
+                          className="min-w-[200px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                          onClick={() => handleSort('proveedor')}
+                        >
+                          Proveedor<SortIcon column="proveedor" />
+                        </TableHead>
+                        <TableHead
+                          aria-sort={getSortAriaValue('tipo')}
+                          className="cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                          onClick={() => handleSort('tipo')}
+                        >
+                          Tipo<SortIcon column="tipo" />
+                        </TableHead>
+                        <TableHead
+                          aria-sort={getSortAriaValue('monto')}
+                          className="text-right cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                          onClick={() => handleSort('monto')}
+                        >
+                          Monto<SortIcon column="monto" />
+                        </TableHead>
+                        <TableHead
+                          aria-sort={getSortAriaValue('emision')}
+                          className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                          onClick={() => handleSort('emision')}
+                        >
+                          Emisión<SortIcon column="emision" />
+                        </TableHead>
+                        <TableHead
+                          aria-sort={getSortAriaValue('vencimiento')}
+                          className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                          onClick={() => handleSort('vencimiento')}
+                        >
+                          Vencimiento<SortIcon column="vencimiento" />
+                        </TableHead>
+                        <TableHead
+                          aria-sort={getSortAriaValue('aprobacion')}
+                          className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                          onClick={() => handleSort('aprobacion')}
+                        >
+                          F. Aprobación<SortIcon column="aprobacion" />
+                        </TableHead>
+                        <TableHead
+                          aria-sort={getSortAriaValue('pago')}
+                          className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                          onClick={() => handleSort('pago')}
+                        >
+                          F. Pago<SortIcon column="pago" />
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((inv) => (
+                        <TableRow key={inv.id}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {inv.issuerTaxIdentifier}
+                                {' · N° '}
+                                {inv.documentNumber}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="whitespace-nowrap">{inv.documentType}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm">{formatDate(inv.issueDate)}</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm">{formatDate(inv.dueDate)}</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm">{formatDate(inv.approvedAt)}</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm">{formatDate(inv.paidAt)}</span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {filtered.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                            No hay facturas pagadas
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="flex flex-col gap-3 p-4 md:hidden">
+                  {filtered.map((inv) => (
+                    <div key={inv.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">{inv.supplierName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {inv.issuerTaxIdentifier}
+                          {' · N° '}
+                          {inv.documentNumber}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>
+                        <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground flex flex-col gap-0.5">
+                        <span>
+                          {'Emisión: '}
+                          <strong>{formatDate(inv.issueDate)}</strong>
+                        </span>
+                        <span>
+                          {'F. Aprobación: '}
+                          <strong>{formatDate(inv.approvedAt)}</strong>
+                        </span>
+                        <span>
+                          {'F. Pago: '}
+                          <strong>{formatDate(inv.paidAt)}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {filtered.length === 0 && (
+                    <p className="py-10 text-center text-muted-foreground">
+                      No hay facturas pagadas
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Pagination footer */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <span className="text-sm text-muted-foreground">
+                {`Página ${pagination.page} de ${pagination.totalPages} — ${pagination.total} facturas`}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1 || loading}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                >
+                  <ChevronLeftIcon className="h-4 w-4" />
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= pagination.totalPages || loading}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                >
+                  Siguiente
+                  <ChevronRightIcon className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </TabsContent>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <p className="text-muted-foreground">Cargando facturas...</p>
-          </div>
-        )}
+        {/* ── Nóminas tab ── */}
+        <TabsContent value={PAID_TAB.NOMINAS} className="flex flex-col flex-1 min-h-0 overflow-auto">
+          <div className="p-4">
+            {nominasLoading && (
+              <div className="flex items-center justify-center py-20">
+                <p className="text-muted-foreground">Cargando nóminas...</p>
+              </div>
+            )}
+            {!nominasLoading && (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fecha de pago</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-center">N° Facturas</TableHead>
+                        <TableHead className="text-center">Estado</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {nominas.map((nom) => (
+                        <TableRow key={nom.id}>
+                          <TableCell className="text-sm">{formatDate(nom.paidAt)}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCLP(nom.totalAmount)}
+                          </TableCell>
+                          <TableCell className="text-center text-sm">{nom.invoiceCount}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="default">
+                              {NOMINA_STATUS_LABELS[nom.status] ?? nom.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5"
+                                onClick={() => handleViewInvoices(nom)}
+                              >
+                                <FileTextIcon className="h-3.5 w-3.5" />
+                                Ver facturas
+                              </Button>
+                              {nom.voucherStoragePath && nom.voucherStorageBucket && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1.5"
+                                  disabled={voucherLoading === nom.id}
+                                  onClick={() => handleViewVoucher(nom)}
+                                >
+                                  {voucherLoading === nom.id
+                                    ? <LoaderIcon className="h-3.5 w-3.5 animate-spin" />
+                                    : <ReceiptIcon className="h-3.5 w-3.5" />}
+                                  Comprobante
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {nominas.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                            No hay nóminas pagadas
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
 
-        {error && (
-          <div className="flex items-center justify-center py-20">
-            <p className="text-destructive">{error}</p>
+                {/* Mobile cards */}
+                <div className="flex flex-col gap-3 md:hidden">
+                  {nominas.map((nom) => (
+                    <div key={nom.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{formatCLP(nom.totalAmount)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {`${nom.invoiceCount} facturas · Pagado el ${formatDate(nom.paidAt)}`}
+                          </span>
+                        </div>
+                        <Badge variant="default" className="shrink-0 text-xs">
+                          {NOMINA_STATUS_LABELS[nom.status] ?? nom.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 gap-1.5"
+                          onClick={() => handleViewInvoices(nom)}
+                        >
+                          <FileTextIcon className="h-3.5 w-3.5" />
+                          Ver facturas
+                        </Button>
+                        {nom.voucherStoragePath && nom.voucherStorageBucket && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 gap-1.5"
+                            disabled={voucherLoading === nom.id}
+                            onClick={() => handleViewVoucher(nom)}
+                          >
+                            {voucherLoading === nom.id
+                              ? <LoaderIcon className="h-3.5 w-3.5 animate-spin" />
+                              : <ReceiptIcon className="h-3.5 w-3.5" />}
+                            Comprobante
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {nominas.length === 0 && (
+                    <p className="py-10 text-center text-muted-foreground">
+                      No hay nóminas pagadas
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-        )}
+        </TabsContent>
+      </Tabs>
 
-        {!loading && !error && (
-          <>
-            {/* Desktop table */}
-            <div className="hidden md:block">
+      {/* Invoice details dialog */}
+      <Dialog
+        open={invoiceDialog.open}
+        onOpenChange={(open) => setInvoiceDialog((s) => ({ ...s, open }))}
+      >
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {invoiceDialog.nomina
+                ? `Nómina del ${formatDate(invoiceDialog.nomina.createdAt)} — ${formatCLP(invoiceDialog.nomina.totalAmount)}`
+                : 'Facturas de la nómina'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {invoiceDialog.loading && (
+              <div className="flex items-center justify-center py-10">
+                <LoaderIcon className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {!invoiceDialog.loading && (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead
-                      aria-sort={getSortAriaValue('proveedor')}
-                      className="min-w-[200px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                      onClick={() => handleSort('proveedor')}
-                    >
-                      Proveedor<SortIcon column="proveedor" />
-                    </TableHead>
-                    <TableHead
-                      aria-sort={getSortAriaValue('tipo')}
-                      className="cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                      onClick={() => handleSort('tipo')}
-                    >
-                      Tipo<SortIcon column="tipo" />
-                    </TableHead>
-                    <TableHead
-                      aria-sort={getSortAriaValue('monto')}
-                      className="text-right cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                      onClick={() => handleSort('monto')}
-                    >
-                      Monto<SortIcon column="monto" />
-                    </TableHead>
-                    <TableHead
-                      aria-sort={getSortAriaValue('emision')}
-                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                      onClick={() => handleSort('emision')}
-                    >
-                      Emisión<SortIcon column="emision" />
-                    </TableHead>
-                    <TableHead
-                      aria-sort={getSortAriaValue('vencimiento')}
-                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                      onClick={() => handleSort('vencimiento')}
-                    >
-                      Vencimiento<SortIcon column="vencimiento" />
-                    </TableHead>
-                    <TableHead
-                      aria-sort={getSortAriaValue('aprobacion')}
-                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                      onClick={() => handleSort('aprobacion')}
-                    >
-                      F. Aprobación<SortIcon column="aprobacion" />
-                    </TableHead>
-                    <TableHead
-                      aria-sort={getSortAriaValue('pago')}
-                      className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                      onClick={() => handleSort('pago')}
-                    >
-                      F. Pago<SortIcon column="pago" />
-                    </TableHead>
+                    <TableHead>Proveedor</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-center hidden sm:table-cell">F. Emisión</TableHead>
+                    <TableHead className="text-center hidden sm:table-cell">F. Pago</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((inv) => (
+                  {invoiceDialog.invoices.map((inv) => (
                     <TableRow key={inv.id}>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
+                          <span className="font-medium text-sm">
+                            {supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier}
+                          </span>
                           <span className="text-xs text-muted-foreground">
-                            {inv.issuerTaxIdentifier}
-                            {' · N° '}
-                            {inv.documentNumber}
+                            {`${inv.issuerTaxIdentifier} · N° ${inv.documentNumber}`}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="whitespace-nowrap">{inv.documentType}</Badge>
+                      <TableCell className="text-right text-sm font-medium">
+                        {formatCLP(inv.grossAmount)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                      <TableCell className="text-center text-sm hidden sm:table-cell">
+                        {formatDate(inv.issueDate)}
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm">{formatDate(inv.issueDate)}</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm">{formatDate(inv.dueDate)}</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm">{formatDate(inv.approvedAt)}</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm">{formatDate(inv.paidAt)}</span>
+                      <TableCell className="text-center text-sm hidden sm:table-cell">
+                        {formatDate(inv.paidAt)}
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && (
+                  {invoiceDialog.invoices.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                        No hay facturas pagadas
+                      <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                        No se encontraron facturas
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-            </div>
-
-            {/* Mobile cards */}
-            <div className="flex flex-col gap-3 p-4 md:hidden">
-              {filtered.map((inv) => (
-                <div key={inv.id} className="rounded-lg border bg-card p-4 shadow-sm">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium">{inv.supplierName}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {inv.issuerTaxIdentifier}
-                      {' · N° '}
-                      {inv.documentNumber}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>
-                    <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground flex flex-col gap-0.5">
-                    <span>
-                      {'Emisión: '}
-                      <strong>{formatDate(inv.issueDate)}</strong>
-                    </span>
-                    <span>
-                      {'F. Aprobación: '}
-                      <strong>{formatDate(inv.approvedAt)}</strong>
-                    </span>
-                    <span>
-                      {'F. Pago: '}
-                      <strong>{formatDate(inv.paidAt)}</strong>
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {filtered.length === 0 && (
-                <p className="py-10 text-center text-muted-foreground">
-                  No hay facturas pagadas
-                </p>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Pagination footer */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between border-t px-4 py-3">
-          <span className="text-sm text-muted-foreground">
-            {`Página ${pagination.page} de ${pagination.totalPages} — ${pagination.total} facturas`}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage <= 1 || loading}
-              onClick={() => setCurrentPage((p) => p - 1)}
-            >
-              <ChevronLeftIcon className="h-4 w-4" />
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage >= pagination.totalPages || loading}
-              onClick={() => setCurrentPage((p) => p + 1)}
-            >
-              Siguiente
-              <ChevronRightIcon className="h-4 w-4" />
-            </Button>
+            )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
