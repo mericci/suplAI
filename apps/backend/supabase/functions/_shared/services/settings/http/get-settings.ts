@@ -29,7 +29,7 @@ export async function getSettingsHandler(
 
     if (!orgId || !isValidUUID(orgId)) return validationError('Invalid organization ID');
 
-    const user = await userDb.findById(context.userId!);
+    const user = context.email ? await userDb.findByEmail(context.email) : null;
     if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('Forbidden', HttpStatus.FORBIDDEN);
     }
