@@ -468,6 +468,7 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const fetchData = async (): Promise<void> => {
@@ -479,6 +480,7 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
         const meRes = await getMe();
         const currentOrgId = meRes.success && meRes.data ? meRes.data.organization_id : null;
         setOrgId(currentOrgId);
+        setIsAdmin(meRes.success && meRes.data ? meRes.data.role === 'admin' : false);
 
         const [supplierRes, docsRes, invoicesRes] = await Promise.all([
           getSupplier(supplierId),
@@ -655,6 +657,7 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
                   orgId={orgId}
                   defaultAccountHolderName={supplier.legalName}
                   defaultTaxIdentifier={formatRut(supplier.taxIdentifier)}
+                  readOnly={!isAdmin}
                 />
               ) : (
                 <div className="flex flex-col items-center gap-2 py-16 text-center">

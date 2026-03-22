@@ -8,6 +8,7 @@ export interface UpsertSupplierPaymentInfoPayload {
   accountType: 'cuenta_corriente' | 'cuenta_vista' | 'cuenta_ahorro' | 'cuenta_rut';
   accountNumber: string;
   currency: 'CLP' | 'USD' | 'UF';
+  email?: string | null;
 }
 
 export async function upsertSupplierPaymentInfo(
