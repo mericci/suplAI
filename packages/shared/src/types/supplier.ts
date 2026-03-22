@@ -20,6 +20,7 @@ export interface SupplierPaymentInfo {
   accountType: 'cuenta_corriente' | 'cuenta_vista' | 'cuenta_ahorro' | 'cuenta_rut';
   accountNumber: string;
   currency: 'CLP' | 'USD' | 'UF';
+  email: string | null;
   createdAt: string;
   updatedAt: string;
 }

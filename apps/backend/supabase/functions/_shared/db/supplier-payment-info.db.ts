@@ -24,6 +24,7 @@ export interface SupplierPaymentInfoRow {
   account_type: AccountType;
   account_number: string;
   currency: Currency;
+  email: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -38,6 +39,7 @@ export interface UpsertSupplierPaymentInfoData {
   account_type: AccountType;
   account_number: string;
   currency: Currency;
+  email?: string | null;
 }
 
 /**
@@ -78,6 +80,7 @@ export async function upsert(data: UpsertSupplierPaymentInfoData): Promise<Suppl
         account_type: data.account_type,
         account_number: data.account_number,
         currency: data.currency,
+        email: data.email ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
@@ -99,6 +102,7 @@ export async function upsert(data: UpsertSupplierPaymentInfoData): Promise<Suppl
       account_type: data.account_type,
       account_number: data.account_number,
       currency: data.currency,
+      email: data.email ?? null,
     })
     .select()
     .single();

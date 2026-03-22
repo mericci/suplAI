@@ -19,6 +19,7 @@ function toPublic(row: paymentInfoDb.SupplierPaymentInfoRow): SupplierPaymentInf
     accountType: row.account_type,
     accountNumber: row.account_number,
     currency: row.currency,
+    email: row.email ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -43,6 +44,7 @@ export async function upsertSupplierPaymentInfo(
       account_type: validated.accountType,
       account_number: validated.accountNumber,
       currency: validated.currency,
+      email: validated.email ?? null,
     });
 
     return toPublic(row);

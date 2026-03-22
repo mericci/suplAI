@@ -28,6 +28,7 @@ interface PaymentInfoTabProps {
   orgId: string;
   defaultAccountHolderName?: string;
   defaultTaxIdentifier?: string;
+  readOnly?: boolean;
 }
 
 const EMPTY_FORM: UpsertSupplierPaymentInfoPayload = {
@@ -37,6 +38,7 @@ const EMPTY_FORM: UpsertSupplierPaymentInfoPayload = {
   accountType: 'cuenta_corriente',
   accountNumber: '',
   currency: 'CLP',
+  email: '',
 };
 
 export function PaymentInfoTab({
@@ -44,6 +46,7 @@ export function PaymentInfoTab({
   orgId,
   defaultAccountHolderName = '',
   defaultTaxIdentifier = '',
+  readOnly = false,
 }: PaymentInfoTabProps): React.JSX.Element {
   const [form, setForm] = useState<UpsertSupplierPaymentInfoPayload>({
     ...EMPTY_FORM,
@@ -69,6 +72,7 @@ export function PaymentInfoTab({
             accountType: res.data.accountType,
             accountNumber: res.data.accountNumber,
             currency: res.data.currency,
+            email: res.data.email ?? '',
           });
         }
       } catch {
@@ -89,14 +93,6 @@ export function PaymentInfoTab({
   }
 
   async function handleSave(): Promise<void> {
-    if (!form.accountHolderName.trim()) {
-      setError('El nombre es obligatorio.');
-      return;
-    }
-    if (!form.taxIdentifier.trim()) {
-      setError('El RUT es obligatorio.');
-      return;
-    }
     if (!form.bank) {
       setError('Selecciona un banco.');
       return;
@@ -137,23 +133,17 @@ export function PaymentInfoTab({
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="payment-account-holder-name">Nombre del titular</Label>
-          <Input
-            id="payment-account-holder-name"
-            value={form.accountHolderName}
-            onChange={(e) => handleFieldChange('accountHolderName', e.target.value)}
-            placeholder="Nombre del titular de la cuenta"
-          />
+          <Label>Nombre del titular</Label>
+          <p className="flex h-9 items-center text-sm">
+            {form.accountHolderName || <span className="text-muted-foreground">—</span>}
+          </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="payment-tax-identifier">RUT</Label>
-          <Input
-            id="payment-tax-identifier"
-            value={form.taxIdentifier}
-            onChange={(e) => handleFieldChange('taxIdentifier', e.target.value)}
-            placeholder="Ej: 76.543.210-K"
-          />
+          <Label>RUT</Label>
+          <p className="flex h-9 items-center text-sm">
+            {form.taxIdentifier || <span className="text-muted-foreground">—</span>}
+          </p>
         </div>
 
         <div className="space-y-1.5">
@@ -161,6 +151,7 @@ export function PaymentInfoTab({
           <Select
             value={form.bank}
             onValueChange={(value) => handleFieldChange('bank', value)}
+            disabled={readOnly}
           >
             <SelectTrigger id="payment-bank">
               <SelectValue placeholder="Seleccionar banco" />
@@ -180,6 +171,7 @@ export function PaymentInfoTab({
           <Select
             value={form.accountType}
             onValueChange={(value) => handleFieldChange('accountType', value as AccountTypeKey)}
+            disabled={readOnly}
           >
             <SelectTrigger id="payment-account-type">
               <SelectValue placeholder="Seleccionar tipo de cuenta" />
@@ -203,6 +195,7 @@ export function PaymentInfoTab({
             value={form.accountNumber}
             onChange={(e) => handleFieldChange('accountNumber', e.target.value)}
             placeholder="Número de cuenta"
+            disabled={readOnly}
           />
         </div>
 
@@ -211,6 +204,7 @@ export function PaymentInfoTab({
           <Select
             value={form.currency}
             onValueChange={(value) => handleFieldChange('currency', value as CurrencyKey)}
+            disabled={readOnly}
           >
             <SelectTrigger id="payment-currency">
               <SelectValue placeholder="Seleccionar moneda" />
@@ -223,6 +217,18 @@ export function PaymentInfoTab({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="payment-email">Correo de contacto</Label>
+          <Input
+            id="payment-email"
+            type="email"
+            value={form.email ?? ''}
+            onChange={(e) => handleFieldChange('email', e.target.value)}
+            placeholder="proveedor@ejemplo.com"
+            disabled={readOnly}
+          />
         </div>
       </div>
 
@@ -238,11 +244,13 @@ export function PaymentInfoTab({
         </p>
       )}
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving || !isDirty}>
-          {saving ? 'Guardando...' : 'Guardar'}
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={saving || !isDirty}>
+            {saving ? 'Guardando...' : 'Guardar'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
