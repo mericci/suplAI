@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  useEffect, useRef, useState, useCallback,
+  useEffect, useRef, useState, useCallback, useMemo,
 } from 'react';
 import {
   SearchIcon,
@@ -245,6 +245,17 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
   const [nominas, setNominas] = useState<NominaWithInvoiceIds[]>([]);
   const [nominasLoading, setNominasLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [totalApprovedAll, setTotalApprovedAll] = useState<number | null>(null);
+
+  // Map invoiceId → nomina for tooltip lookup
+  const invoiceToNominaMap = useMemo<Map<string, NominaWithInvoiceIds>>(() => {
+    const map = new Map<string, NominaWithInvoiceIds>();
+    nominas.forEach((nom) => {
+      nom.invoiceIds.forEach((id) => map.set(id, nom));
+    });
+    return map;
+  }, [nominas]);
+
   const [payDialog, setPayDialog] = useState<PayDialogState>({
     open: false,
     nomina: null,
@@ -296,6 +307,21 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
     }
   }, []);
 
+  const fetchTotalApproved = useCallback(async (orgId: string): Promise<void> => {
+    let sum = 0;
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await getOrgInvoices(orgId, { page, limit: 500, status: 'approved' });
+      if (!res.success || !res.data) break;
+      res.data.data.forEach((inv) => { sum += inv.grossAmount ?? 0; });
+      hasMore = page < res.data.pagination.totalPages;
+      page += 1;
+    }
+    setTotalApprovedAll(sum);
+  }, []);
+
   const refreshNominas = useCallback(async (orgId: string): Promise<void> => {
     setNominasLoading(true);
     try {
@@ -320,10 +346,11 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
       await Promise.all([
         refreshLockedIds(orgId),
         refreshNominas(orgId),
+        fetchTotalApproved(orgId),
       ]);
     };
     init();
-  }, [getOrgId, refreshLockedIds, refreshNominas]);
+  }, [getOrgId, refreshLockedIds, refreshNominas, fetchTotalApproved]);
 
   useEffect(() => {
     const fetchInvoices = async (): Promise<void> => {
@@ -664,7 +691,9 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
         <div className="flex gap-4 border-b px-4 py-3">
           <div className="rounded-lg border bg-emerald-50 px-4 py-2">
             <p className="text-xs text-emerald-700">Por pagar (aprobadas)</p>
-            <p className="text-lg font-semibold text-emerald-800">{formatCLP(totalApproved)}</p>
+            <p className="text-lg font-semibold text-emerald-800">
+              {totalApprovedAll === null ? '...' : formatCLP(totalApprovedAll)}
+            </p>
           </div>
         </div>
 
@@ -854,6 +883,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                           >
                             Plazo<SortIcon column="plazo" />
                           </TableHead>
+                          <TableHead className="text-center">Nómina</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -880,11 +910,6 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                                     <span className="font-medium truncate max-w-[180px]">
                                       {inv.supplierName}
                                     </span>
-                                    {isLocked && (
-                                      <Badge variant="secondary" className="text-xs shrink-0">
-                                        En nómina
-                                      </Badge>
-                                    )}
                                   </div>
                                   <span className="text-xs text-muted-foreground">
                                     {inv.issuerTaxIdentifier}
@@ -953,12 +978,38 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                                   {formatDate(inv.executiveTitleDate)}
                                 </span>
                               </TableCell>
+                              <TableCell className="text-center">
+                                {(() => {
+                                  const nom = invoiceToNominaMap.get(inv.id);
+                                  if (!nom) return <span className="text-xs text-muted-foreground">—</span>;
+                                  return (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="secondary" className="text-xs cursor-default">
+                                          En nómina
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-left">
+                                        <p className="font-medium">
+                                          {`Nómina del ${formatDate(nom.createdAt)}`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {`${formatCLP(nom.totalAmount)} · ${nom.invoiceCount} facturas`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {NOMINA_STATUS_LABELS[nom.status] ?? nom.status}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                })()}
+                              </TableCell>
                             </TableRow>
                           );
                         })}
                         {filtered.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-10 text-muted-foreground">
+                            <TableCell colSpan={isAdmin ? 10 : 9} className="text-center py-10 text-muted-foreground">
                               No hay facturas aprobadas
                             </TableCell>
                           </TableRow>
@@ -977,9 +1028,30 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">{inv.supplierName}</span>
-                                {isLocked && (
-                                  <Badge variant="secondary" className="text-xs">En nómina</Badge>
-                                )}
+                                {(() => {
+                                  const nom = invoiceToNominaMap.get(inv.id);
+                                  if (!nom) return null;
+                                  return (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="secondary" className="text-xs cursor-default">
+                                          En nómina
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-left">
+                                        <p className="font-medium">
+                                          {`Nómina del ${formatDate(nom.createdAt)}`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {`${formatCLP(nom.totalAmount)} · ${nom.invoiceCount} facturas`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {NOMINA_STATUS_LABELS[nom.status] ?? nom.status}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                })()}
                               </div>
                               <span className="text-xs text-muted-foreground">
                                 {inv.issuerTaxIdentifier}
