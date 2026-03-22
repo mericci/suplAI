@@ -15,6 +15,7 @@ import {
   XIcon,
   CheckCircle2Icon,
   XCircleIcon,
+  DownloadIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -53,7 +54,7 @@ import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
 import { getMe, getUser } from '@/integrations/backend/users';
 import type { User } from '@/integrations/backend/users';
-import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
+import { getSupplier, listSuppliersByOrg, getSupplierPaymentInfo } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
 import { payInvoice } from '@/integrations/backend/invoices';
 import { cn } from '@/lib/utils';
@@ -181,6 +182,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
+  const [downloadingNomina, setDownloadingNomina] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSortChangeRef = useRef(false);
 
@@ -364,6 +366,78 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
     }
   };
 
+  const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+    cuenta_corriente: 'Cuenta Corriente',
+    cuenta_vista: 'Cuenta Vista',
+    cuenta_ahorro: 'Cuenta Ahorro',
+    cuenta_rut: 'Cuenta RUT',
+  };
+
+  const handleDownloadNomina = async (): Promise<void> => {
+    const orgId = await getOrgId();
+    if (!orgId) return;
+    setDownloadingNomina(true);
+    try {
+      const allInvoices: Invoice[] = [];
+      let page = 1;
+      const limit = 500;
+      let totalPages = 1;
+      do {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await getOrgInvoices(orgId, { page, limit, status: 'approved' });
+        if (!res.success || !res.data) return;
+        allInvoices.push(...res.data.data);
+        totalPages = res.data.pagination.totalPages;
+        page += 1;
+      } while (page <= totalPages);
+
+      // Resolve supplier names for any not yet cached
+      const uniqueSupplierIds = [...new Set(allInvoices.map((inv) => inv.supplierId))];
+      const uncachedSuppliers = uniqueSupplierIds.filter((id) => !supplierNameCache.has(id));
+      const supplierResults = await Promise.all(uncachedSuppliers.map((id) => getSupplier(id)));
+      supplierResults.forEach((r, i) => {
+        if (r.success && r.data) supplierNameCache.set(uncachedSuppliers[i], r.data.legalName);
+      });
+
+      // Fetch payment info for all unique suppliers in parallel
+      const paymentInfoMap = new Map<string, Awaited<ReturnType<typeof getSupplierPaymentInfo>>['data']>();
+      await Promise.all(
+        uniqueSupplierIds.map(async (id) => {
+          const r = await getSupplierPaymentInfo(orgId, id);
+          paymentInfoMap.set(id, r.success ? r.data : null);
+        }),
+      );
+
+      const headers = [
+        'Nombre proveedor', 'Rut', 'Monto', 'Banco',
+        'Tipo de cuenta bancaria', 'Número cuenta bancaria', 'Correo proveedor',
+      ];
+      const rows = allInvoices.map((inv) => {
+        const pi = paymentInfoMap.get(inv.supplierId);
+        return [
+          supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier,
+          inv.issuerTaxIdentifier,
+          inv.grossAmount?.toString() ?? '',
+          pi?.bank ?? '',
+          pi?.accountType ? (ACCOUNT_TYPE_LABELS[pi.accountType] ?? pi.accountType) : '',
+          pi?.accountNumber ?? '',
+          pi?.email ?? '',
+        ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',');
+      });
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nomina-aprobadas-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingNomina(false);
+    }
+  };
+
   const filtered = invoices.filter(
     (inv) => !debouncedSearch
       || inv.supplierName.toLowerCase().includes(debouncedSearch.toLowerCase())
@@ -428,6 +502,15 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                 {activeFilterCount}
               </Badge>
             )}
+          </Button>
+          <Button
+            variant="outline"
+            className="shrink-0 gap-2"
+            onClick={handleDownloadNomina}
+            disabled={downloadingNomina}
+          >
+            <DownloadIcon className="h-4 w-4" />
+            {downloadingNomina ? 'Descargando...' : 'Descargar nomina'}
           </Button>
         </div>
 
