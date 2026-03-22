@@ -32,7 +32,7 @@ export async function upsertSettingsHandler(
 
     // Admin check
     const user = await userDb.findById(context.userId!);
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('Forbidden', HttpStatus.FORBIDDEN);
     }
 
