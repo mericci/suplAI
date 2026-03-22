@@ -17,6 +17,7 @@ export type Json =
   | Json[];
 
 export type InvoiceStatus = 'pending' | 'approved' | 'rejected' | 'paid';
+export type NominaStatus = 'pending' | 'paid';
 
 export interface Database {
   public: {
@@ -258,6 +259,73 @@ export interface Database {
           deleted_at?: string | null;
         };
       };
+      nominas: {
+        Row: {
+          id: string;
+          organization_id: string;
+          created_by_user_id: string;
+          status: NominaStatus;
+          total_amount: number;
+          invoice_count: number;
+          voucher_storage_path: string | null;
+          voucher_storage_bucket: string | null;
+          paid_at: string | null;
+          paid_by_user_id: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          created_by_user_id: string;
+          status?: NominaStatus;
+          total_amount: number;
+          invoice_count: number;
+          voucher_storage_path?: string | null;
+          voucher_storage_bucket?: string | null;
+          paid_at?: string | null;
+          paid_by_user_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          created_by_user_id?: string;
+          status?: NominaStatus;
+          total_amount?: number;
+          invoice_count?: number;
+          voucher_storage_path?: string | null;
+          voucher_storage_bucket?: string | null;
+          paid_at?: string | null;
+          paid_by_user_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
+      nomina_invoices: {
+        Row: {
+          id: string;
+          nomina_id: string;
+          invoice_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          nomina_id: string;
+          invoice_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          nomina_id?: string;
+          invoice_id?: string;
+          created_at?: string;
+        };
+      };
       budget_items: {
         Row: {
           id: string;
@@ -308,6 +376,7 @@ export interface Database {
     };
     Enums: {
       invoice_status: InvoiceStatus;
+      nomina_status: NominaStatus;
     };
   };
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  useEffect, useRef, useState, useCallback,
+  useEffect, useRef, useState, useCallback, useMemo,
 } from 'react';
 import {
   SearchIcon,
@@ -16,12 +16,16 @@ import {
   CheckCircle2Icon,
   XCircleIcon,
   DownloadIcon,
+  LoaderIcon,
+  PaperclipIcon,
 } from 'lucide-react';
+import type { NominaWithInvoiceIds } from '@supl/shared';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -50,14 +54,44 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
+import {
+  Tabs, TabsList, TabsTrigger, TabsContent,
+} from '@/components/ui/tabs';
 import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
 import { getMe, getUser } from '@/integrations/backend/users';
 import type { User } from '@/integrations/backend/users';
-import { getSupplier, listSuppliersByOrg, getSupplierPaymentInfo } from '@/integrations/backend/suppliers';
+import {
+  getSupplier, listSuppliersByOrg, getSupplierPaymentInfo,
+} from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
-import { payInvoice } from '@/integrations/backend/invoices';
+import {
+  listNominas,
+  createNomina,
+  deleteNomina,
+  payNomina,
+  getLockedInvoiceIds,
+} from '@/integrations/backend/nominas';
+import type { PayNominaAmountMismatch } from '@/integrations/backend/nominas';
 import { cn } from '@/lib/utils';
+import { NOMINA_STATUS, NOMINA_STATUS_LABELS, NOMINA_TAB } from '@/features/nominas/constants';
 
 const PAGE_SIZE = 10;
 
@@ -88,6 +122,7 @@ const COLUMN_TO_DB: Record<string, string> = {
 };
 
 let cachedOrgId: string | null = null;
+let cachedUserRole: string | null = null;
 const supplierNameCache = new Map<string, string>();
 const userCache = new Map<string, User>();
 
@@ -102,6 +137,21 @@ interface Pagination {
   limit: number;
   total: number;
   totalPages: number;
+}
+
+interface PayDialogState {
+  open: boolean;
+  nomina: NominaWithInvoiceIds | null;
+  file: File | null;
+  uploading: boolean;
+  mismatch: PayNominaAmountMismatch | null;
+  error: string | null;
+}
+
+interface DeleteDialogState {
+  open: boolean;
+  nomina: NominaWithInvoiceIds | null;
+  deleting: boolean;
 }
 
 function formatCLP(amount: number | null): string {
@@ -168,7 +218,15 @@ function deadlineClass(dateStr: string): string {
   return 'text-foreground';
 }
 
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  cuenta_corriente: 'Cuenta Corriente',
+  cuenta_vista: 'Cuenta Vista',
+  cuenta_ahorro: 'Cuenta Ahorro',
+  cuenta_rut: 'Cuenta RUT',
+};
+
 export default function ApprovedInvoicesPage(): React.JSX.Element {
+  const [activeTab, setActiveTab] = useState<string>(NOMINA_TAB.FACTURAS);
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -180,9 +238,37 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
-  const [downloadingNomina, setDownloadingNomina] = useState(false);
+  const [creatingNomina, setCreatingNomina] = useState(false);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set());
+  const [lockedInvoiceIds, setLockedInvoiceIds] = useState<Set<string>>(new Set());
+  const [nominas, setNominas] = useState<NominaWithInvoiceIds[]>([]);
+  const [nominasLoading, setNominasLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [totalApprovedAll, setTotalApprovedAll] = useState<number | null>(null);
+
+  // Map invoiceId → nomina for tooltip lookup
+  const invoiceToNominaMap = useMemo<Map<string, NominaWithInvoiceIds>>(() => {
+    const map = new Map<string, NominaWithInvoiceIds>();
+    nominas.forEach((nom) => {
+      nom.invoiceIds.forEach((id) => map.set(id, nom));
+    });
+    return map;
+  }, [nominas]);
+
+  const [payDialog, setPayDialog] = useState<PayDialogState>({
+    open: false,
+    nomina: null,
+    file: null,
+    uploading: false,
+    mismatch: null,
+    error: null,
+  });
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({
+    open: false,
+    nomina: null,
+    deleting: false,
+  });
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSortChangeRef = useRef(false);
 
@@ -210,18 +296,61 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
     const meResponse = await getMe();
     if (!meResponse.success || !meResponse.data) return null;
     cachedOrgId = meResponse.data.organization_id;
+    cachedUserRole = meResponse.data.role;
     return cachedOrgId;
   }, []);
 
+  const refreshLockedIds = useCallback(async (orgId: string): Promise<void> => {
+    const res = await getLockedInvoiceIds(orgId);
+    if (res.success && res.data) {
+      setLockedInvoiceIds(new Set(res.data));
+    }
+  }, []);
+
+  const fetchTotalApproved = useCallback(async (orgId: string): Promise<void> => {
+    let sum = 0;
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await getOrgInvoices(orgId, { page, limit: 500, status: 'approved' });
+      if (!res.success || !res.data) break;
+      res.data.data.forEach((inv) => { sum += inv.grossAmount ?? 0; });
+      hasMore = page < res.data.pagination.totalPages;
+      page += 1;
+    }
+    setTotalApprovedAll(sum);
+  }, []);
+
+  const refreshNominas = useCallback(async (orgId: string): Promise<void> => {
+    setNominasLoading(true);
+    try {
+      const res = await listNominas(orgId);
+      if (res.success && res.data) setNominas(res.data);
+    } finally {
+      setNominasLoading(false);
+    }
+  }, []);
+
+  // Load user, suppliers, locked IDs and nominas on mount
   useEffect(() => {
-    const loadSuppliers = async (): Promise<void> => {
+    const init = async (): Promise<void> => {
       const orgId = await getOrgId();
       if (!orgId) return;
-      const res = await listSuppliersByOrg(orgId, { limit: 100 });
-      if (res.success) setSuppliers(res.data);
+
+      if (cachedUserRole) setIsAdmin(cachedUserRole === 'admin');
+
+      const suppliersRes = await listSuppliersByOrg(orgId, { limit: 100 });
+      if (suppliersRes.success) setSuppliers(suppliersRes.data);
+
+      await Promise.all([
+        refreshLockedIds(orgId),
+        refreshNominas(orgId),
+        fetchTotalApproved(orgId),
+      ]);
     };
-    loadSuppliers();
-  }, [getOrgId]);
+    init();
+  }, [getOrgId, refreshLockedIds, refreshNominas, fetchTotalApproved]);
 
   useEffect(() => {
     const fetchInvoices = async (): Promise<void> => {
@@ -349,95 +478,6 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
     appliedFilters.amountValue !== '',
   ].filter(Boolean).length;
 
-  const handleMarkAsPaid = async (inv: EnrichedInvoice): Promise<void> => {
-    const orgId = await getOrgId();
-    if (!orgId) return;
-    setActionLoading(inv.id);
-    try {
-      await payInvoice(orgId, inv.id);
-      setInvoices((prev) => prev.filter((i) => i.id !== inv.id));
-      setPagination((p) => {
-        if (!p) return p;
-        const newTotal = p.total - 1;
-        return { ...p, total: newTotal, totalPages: Math.ceil(newTotal / PAGE_SIZE) };
-      });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-    cuenta_corriente: 'Cuenta Corriente',
-    cuenta_vista: 'Cuenta Vista',
-    cuenta_ahorro: 'Cuenta Ahorro',
-    cuenta_rut: 'Cuenta RUT',
-  };
-
-  const handleDownloadNomina = async (): Promise<void> => {
-    const orgId = await getOrgId();
-    if (!orgId) return;
-    setDownloadingNomina(true);
-    try {
-      const allInvoices: Invoice[] = [];
-      let page = 1;
-      const limit = 500;
-      let totalPages = 1;
-      do {
-        // eslint-disable-next-line no-await-in-loop
-        const res = await getOrgInvoices(orgId, { page, limit, status: 'approved' });
-        if (!res.success || !res.data) return;
-        allInvoices.push(...res.data.data);
-        totalPages = res.data.pagination.totalPages;
-        page += 1;
-      } while (page <= totalPages);
-
-      // Resolve supplier names for any not yet cached
-      const uniqueSupplierIds = [...new Set(allInvoices.map((inv) => inv.supplierId))];
-      const uncachedSuppliers = uniqueSupplierIds.filter((id) => !supplierNameCache.has(id));
-      const supplierResults = await Promise.all(uncachedSuppliers.map((id) => getSupplier(id)));
-      supplierResults.forEach((r, i) => {
-        if (r.success && r.data) supplierNameCache.set(uncachedSuppliers[i], r.data.legalName);
-      });
-
-      // Fetch payment info for all unique suppliers in parallel
-      const paymentInfoMap = new Map<string, Awaited<ReturnType<typeof getSupplierPaymentInfo>>['data']>();
-      await Promise.all(
-        uniqueSupplierIds.map(async (id) => {
-          const r = await getSupplierPaymentInfo(orgId, id);
-          paymentInfoMap.set(id, r.success ? r.data : null);
-        }),
-      );
-
-      const headers = [
-        'Nombre proveedor', 'Rut', 'Monto', 'Banco',
-        'Tipo de cuenta bancaria', 'Número cuenta bancaria', 'Correo proveedor',
-      ];
-      const rows = allInvoices.map((inv) => {
-        const pi = paymentInfoMap.get(inv.supplierId);
-        return [
-          supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier,
-          inv.issuerTaxIdentifier,
-          inv.grossAmount?.toString() ?? '',
-          pi?.bank ?? '',
-          pi?.accountType ? (ACCOUNT_TYPE_LABELS[pi.accountType] ?? pi.accountType) : '',
-          pi?.accountNumber ?? '',
-          pi?.email ?? '',
-        ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',');
-      });
-
-      const csv = [headers.join(','), ...rows].join('\n');
-      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `nomina-aprobadas-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setDownloadingNomina(false);
-    }
-  };
-
   const filtered = invoices.filter(
     (inv) => !debouncedSearch
       || inv.supplierName.toLowerCase().includes(debouncedSearch.toLowerCase())
@@ -446,6 +486,173 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
   );
 
   const totalApproved = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
+
+  // Unlocked invoices on current page
+  const unlockedOnPage = filtered.filter((inv) => !lockedInvoiceIds.has(inv.id));
+  const allUnlockedSelected = unlockedOnPage.length > 0
+    && unlockedOnPage.every((inv) => selectedInvoiceIds.has(inv.id));
+
+  const handleHeaderCheckboxChange = (checked: boolean): void => {
+    setSelectedInvoiceIds((prev) => {
+      const next = new Set(prev);
+      unlockedOnPage.forEach((inv) => {
+        if (checked) next.add(inv.id);
+        else next.delete(inv.id);
+      });
+      return next;
+    });
+  };
+
+  const handleRowCheckboxChange = (id: string, checked: boolean): void => {
+    setSelectedInvoiceIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const generateCsv = (
+    allInvs: Invoice[],
+    paymentInfoMap: Map<string, Awaited<ReturnType<typeof getSupplierPaymentInfo>>['data']>,
+  ): void => {
+    const headers = [
+      'Nombre proveedor', 'Rut', 'Monto', 'Banco',
+      'Tipo de cuenta bancaria', 'Número cuenta bancaria', 'Correo proveedor',
+    ];
+    const rows = allInvs.map((inv) => {
+      const pi = paymentInfoMap.get(inv.supplierId);
+      return [
+        supplierNameCache.get(inv.supplierId) ?? inv.issuerTaxIdentifier,
+        inv.issuerTaxIdentifier,
+        inv.grossAmount?.toString() ?? '',
+        pi?.bank ?? '',
+        pi?.accountType ? (ACCOUNT_TYPE_LABELS[pi.accountType] ?? pi.accountType) : '',
+        pi?.accountNumber ?? '',
+        pi?.email ?? '',
+      ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nomina-aprobadas-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCreateAndDownloadNomina = async (): Promise<void> => {
+    const orgId = await getOrgId();
+    if (!orgId) return;
+    setCreatingNomina(true);
+    try {
+      const ids = selectedInvoiceIds.size > 0 ? [...selectedInvoiceIds] : [];
+      const res = await createNomina(orgId, { invoiceIds: ids });
+      if (!res.success || !res.data) {
+        setError('Error al crear nómina');
+        return;
+      }
+
+      const nomina = res.data;
+
+      // Fetch the invoices that belong to this nomina for CSV
+      const invoiceIdsForCsv = nomina.invoiceIds;
+      const allInvoicesForCsv: Invoice[] = [];
+      let page = 1;
+      const limit = 500;
+      let totalPages = 1;
+      do {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await getOrgInvoices(orgId, { page, limit, status: 'approved' });
+        if (!r.success || !r.data) break;
+        allInvoicesForCsv.push(...r.data.data.filter((inv) => invoiceIdsForCsv.includes(inv.id)));
+        totalPages = r.data.pagination.totalPages;
+        page += 1;
+      } while (page <= totalPages && allInvoicesForCsv.length < invoiceIdsForCsv.length);
+
+      // Resolve supplier names for any not yet cached
+      const uniqueSupplierIds = [...new Set(allInvoicesForCsv.map((inv) => inv.supplierId))];
+      const uncachedSuppliers = uniqueSupplierIds.filter((id) => !supplierNameCache.has(id));
+      const supplierResults = await Promise.all(uncachedSuppliers.map((id) => getSupplier(id)));
+      supplierResults.forEach((r, i) => {
+        if (r.success && r.data) supplierNameCache.set(uncachedSuppliers[i], r.data.legalName);
+      });
+
+      // Fetch payment info
+      const paymentInfoMap = new Map<string, Awaited<ReturnType<typeof getSupplierPaymentInfo>>['data']>();
+      await Promise.all(
+        uniqueSupplierIds.map(async (id) => {
+          const r = await getSupplierPaymentInfo(orgId, id);
+          paymentInfoMap.set(id, r.success ? r.data : null);
+        }),
+      );
+
+      generateCsv(allInvoicesForCsv, paymentInfoMap);
+
+      // Refresh state
+      await Promise.all([refreshLockedIds(orgId), refreshNominas(orgId)]);
+      setSelectedInvoiceIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al crear nómina');
+    } finally {
+      setCreatingNomina(false);
+    }
+  };
+
+  // Pay nomina
+  const handlePayConfirm = async (): Promise<void> => {
+    const orgId = await getOrgId();
+    if (!orgId || !payDialog.nomina || !payDialog.file) return;
+    setPayDialog((s) => ({
+      ...s, uploading: true, mismatch: null, error: null,
+    }));
+    try {
+      const result = await payNomina(orgId, payDialog.nomina.id, payDialog.file);
+      if (!result.success) {
+        if (result.error === 'amount_mismatch' && result.mismatch) {
+          setPayDialog((s) => ({ ...s, uploading: false, mismatch: result.mismatch! }));
+          return;
+        }
+        setPayDialog((s) => ({
+          ...s,
+          uploading: false,
+          error: result.error ?? 'Error al procesar el pago',
+        }));
+        return;
+      }
+      setPayDialog({
+        open: false,
+        nomina: null,
+        file: null,
+        uploading: false,
+        mismatch: null,
+        error: null,
+      });
+      await Promise.all([refreshLockedIds(orgId), refreshNominas(orgId)]);
+    } catch (err) {
+      setPayDialog((s) => ({
+        ...s,
+        uploading: false,
+        error: err instanceof Error ? err.message : 'Error al procesar el pago',
+      }));
+    }
+  };
+
+  // Delete nomina
+  const handleDeleteConfirm = async (): Promise<void> => {
+    const orgId = await getOrgId();
+    if (!orgId || !deleteDialog.nomina) return;
+    setDeleteDialog((s) => ({ ...s, deleting: true }));
+    try {
+      await deleteNomina(orgId, deleteDialog.nomina.id);
+      setDeleteDialog({ open: false, nomina: null, deleting: false });
+      await Promise.all([refreshLockedIds(orgId), refreshNominas(orgId)]);
+    } catch {
+      setDeleteDialog((s) => ({ ...s, deleting: false }));
+    }
+  };
 
   function SortIcon({ column }: { column: string }): React.JSX.Element {
     if (sortConfig.column !== column) {
@@ -459,6 +666,15 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
   function getSortAriaValue(col: string): 'ascending' | 'descending' | 'none' {
     if (sortConfig.column !== col) return 'none';
     return sortConfig.direction === 'asc' ? 'ascending' : 'descending';
+  }
+
+  function NominaStatusBadge({ status }: { status: string }): React.JSX.Element {
+    const isPaid = status === NOMINA_STATUS.PAID;
+    return (
+      <Badge variant={isPaid ? 'default' : 'secondary'}>
+        {NOMINA_STATUS_LABELS[status] ?? status}
+      </Badge>
+    );
   }
 
   return (
@@ -475,384 +691,751 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
         <div className="flex gap-4 border-b px-4 py-3">
           <div className="rounded-lg border bg-emerald-50 px-4 py-2">
             <p className="text-xs text-emerald-700">Por pagar (aprobadas)</p>
-            <p className="text-lg font-semibold text-emerald-800">{formatCLP(totalApproved)}</p>
+            <p className="text-lg font-semibold text-emerald-800">
+              {totalApprovedAll === null ? '...' : formatCLP(totalApprovedAll)}
+            </p>
           </div>
         </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar proveedor o folio..."
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-9"
-            />
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
+          <div className="border-b px-4 pt-2">
+            <TabsList variant="line">
+              <TabsTrigger value={NOMINA_TAB.FACTURAS}>Facturas Aprobadas</TabsTrigger>
+              <TabsTrigger value={NOMINA_TAB.NOMINAS}>Nóminas</TabsTrigger>
+            </TabsList>
           </div>
-          <Button
-            variant="outline"
-            className="shrink-0 gap-2"
-            onClick={() => setShowFilters((v) => !v)}
-          >
-            <FilterIcon className="h-4 w-4" />
-            Filtrar
-            {activeFilterCount > 0 && (
-              <Badge className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            className="shrink-0 gap-2"
-            onClick={handleDownloadNomina}
-            disabled={downloadingNomina}
-          >
-            <DownloadIcon className="h-4 w-4" />
-            {downloadingNomina ? 'Descargando...' : 'Descargar nomina'}
-          </Button>
-        </div>
 
-        {/* Filter panel */}
-        {showFilters && (
-          <div className="border-b bg-muted/30 px-4 py-3">
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">Proveedor</span>
-                <Select
-                  value={filters.supplierId}
-                  onValueChange={(v) => setFilters((f) => ({ ...f, supplierId: v }))}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Todos los proveedores" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los proveedores</SelectItem>
-                    {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.legalName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {/* Facturas tab */}
+          <TabsContent value={NOMINA_TAB.FACTURAS} className="flex flex-col flex-1 min-h-0">
+            {/* Toolbar */}
+            <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar proveedor o folio..."
+                  value={search}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-9"
+                />
               </div>
+              <Button
+                variant="outline"
+                className="shrink-0 gap-2"
+                onClick={() => setShowFilters((v) => !v)}
+              >
+                <FilterIcon className="h-4 w-4" />
+                Filtrar
+                {activeFilterCount > 0 && (
+                  <Badge className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="shrink-0 gap-2"
+                  onClick={handleCreateAndDownloadNomina}
+                  disabled={creatingNomina}
+                >
+                  {creatingNomina
+                    ? <LoaderIcon className="h-4 w-4 animate-spin" />
+                    : <DownloadIcon className="h-4 w-4" />}
+                  {creatingNomina ? 'Creando...' : 'Crear y descargar nómina'}
+                </Button>
+              )}
+            </div>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">Monto bruto</span>
-                <div className="flex gap-2">
-                  <Select
-                    value={filters.amountOp}
-                    onValueChange={(v) => setFilters((f) => ({ ...f, amountOp: v as AmountOp }))}
-                  >
-                    <SelectTrigger className="w-[110px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gte">&gt;=</SelectItem>
-                      <SelectItem value="lte">&lt;=</SelectItem>
-                      <SelectItem value="eq">=</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={filters.amountValue}
-                    onChange={(e) => setFilters((f) => ({ ...f, amountValue: e.target.value }))}
-                    className="w-[120px]"
-                  />
+            {/* Filter panel */}
+            {showFilters && (
+              <div className="border-b bg-muted/30 px-4 py-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">Proveedor</span>
+                    <Select
+                      value={filters.supplierId}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, supplierId: v }))}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Todos los proveedores" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los proveedores</SelectItem>
+                        {suppliers.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.legalName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">Monto bruto</span>
+                    <div className="flex gap-2">
+                      <Select
+                        value={filters.amountOp}
+                        onValueChange={(v) => setFilters((f) => ({
+                          ...f, amountOp: v as AmountOp,
+                        }))}
+                      >
+                        <SelectTrigger className="w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gte">&gt;=</SelectItem>
+                          <SelectItem value="lte">&lt;=</SelectItem>
+                          <SelectItem value="eq">=</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={filters.amountValue}
+                        onChange={(e) => setFilters((f) => ({ ...f, amountValue: e.target.value }))}
+                        className="w-[120px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={handleApplyFilters}>Aplicar</Button>
+                    <Button size="sm" variant="ghost" onClick={handleClearFilters} className="gap-1">
+                      <XIcon className="h-3 w-3" />
+                      Limpiar
+                    </Button>
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleApplyFilters}>Aplicar</Button>
-                <Button size="sm" variant="ghost" onClick={handleClearFilters} className="gap-1">
-                  <XIcon className="h-3 w-3" />
-                  Limpiar
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+            {/* Content */}
+            <div className="flex-1 overflow-auto">
+              {loading && (
+                <div className="flex items-center justify-center py-20">
+                  <p className="text-muted-foreground">Cargando facturas...</p>
+                </div>
+              )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto">
-          {loading && (
-            <div className="flex items-center justify-center py-20">
-              <p className="text-muted-foreground">Cargando facturas...</p>
-            </div>
-          )}
+              {error && (
+                <div className="flex items-center justify-center py-20">
+                  <p className="text-destructive">{error}</p>
+                </div>
+              )}
 
-          {error && (
-            <div className="flex items-center justify-center py-20">
-              <p className="text-destructive">{error}</p>
-            </div>
-          )}
+              {!loading && !error && (
+                <>
+                  {/* Desktop table */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {isAdmin && (
+                            <TableHead className="w-[40px]">
+                              <Checkbox
+                                checked={allUnlockedSelected}
+                                onCheckedChange={(v) => handleHeaderCheckboxChange(Boolean(v))}
+                                disabled={unlockedOnPage.length === 0}
+                                aria-label="Seleccionar todas"
+                              />
+                            </TableHead>
+                          )}
+                          <TableHead
+                            aria-sort={getSortAriaValue('proveedor')}
+                            className="min-w-[180px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                            onClick={() => handleSort('proveedor')}
+                          >
+                            Proveedor<SortIcon column="proveedor" />
+                          </TableHead>
+                          <TableHead
+                            aria-sort={getSortAriaValue('tipo')}
+                            className="cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                            onClick={() => handleSort('tipo')}
+                          >
+                            Tipo<SortIcon column="tipo" />
+                          </TableHead>
+                          <TableHead
+                            aria-sort={getSortAriaValue('monto')}
+                            className="text-right cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                            onClick={() => handleSort('monto')}
+                          >
+                            Monto<SortIcon column="monto" />
+                          </TableHead>
+                          <TableHead
+                            aria-sort={getSortAriaValue('emision')}
+                            className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                            onClick={() => handleSort('emision')}
+                          >
+                            Emisión<SortIcon column="emision" />
+                          </TableHead>
+                          <TableHead
+                            aria-sort={getSortAriaValue('aprobado_el')}
+                            className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                            onClick={() => handleSort('aprobado_el')}
+                          >
+                            Aprobado el<SortIcon column="aprobado_el" />
+                          </TableHead>
+                          <TableHead className="text-center">Aprobado por</TableHead>
+                          <TableHead className="text-center">IA</TableHead>
+                          <TableHead
+                            aria-sort={getSortAriaValue('plazo')}
+                            className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                            onClick={() => handleSort('plazo')}
+                          >
+                            Plazo<SortIcon column="plazo" />
+                          </TableHead>
+                          <TableHead className="text-center">Nómina</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.map((inv) => {
+                          const isLocked = lockedInvoiceIds.has(inv.id);
+                          const onCheckChange = (v: boolean | 'indeterminate'): void => {
+                            handleRowCheckboxChange(inv.id, !!v);
+                          };
+                          return (
+                            <TableRow key={inv.id} className={isLocked ? 'opacity-60' : ''}>
+                              {isAdmin && (
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedInvoiceIds.has(inv.id)}
+                                    onCheckedChange={onCheckChange}
+                                    disabled={isLocked}
+                                    aria-label={`Seleccionar factura ${inv.documentNumber}`}
+                                  />
+                                </TableCell>
+                              )}
+                              <TableCell>
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium truncate max-w-[180px]">
+                                      {inv.supplierName}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">
+                                    {inv.issuerTaxIdentifier}
+                                    {' · N° '}
+                                    {inv.documentNumber}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="whitespace-nowrap">
+                                  {inv.documentType}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm">{formatDate(inv.issueDate)}</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm">{formatDate(inv.approvedAt)}</span>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  {inv.approver ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Avatar className="h-7 w-7 cursor-default">
+                                          <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                                            {getUserInitials(inv.approver)}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-left">
+                                        <p className="font-medium">{getUserDisplayName(inv.approver)}</p>
+                                        <p className="text-muted-foreground">{inv.approver.email}</p>
+                                        <p className="capitalize text-muted-foreground">
+                                          {inv.approver.role}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {inv.aiValidated ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <CheckCircle2Icon className="h-4 w-4 text-emerald-600 mx-auto" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Validado por IA</TooltipContent>
+                                  </Tooltip>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <XCircleIcon className="h-4 w-4 text-red-500 mx-auto" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>No validado por IA</TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className={cn('text-sm', deadlineClass(inv.executiveTitleDate))}>
+                                  {formatDate(inv.executiveTitleDate)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {(() => {
+                                  const nom = invoiceToNominaMap.get(inv.id);
+                                  if (!nom) return <span className="text-xs text-muted-foreground">—</span>;
+                                  return (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="secondary" className="text-xs cursor-default">
+                                          En nómina
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-left">
+                                        <p className="font-medium">
+                                          {`Nómina del ${formatDate(nom.createdAt)}`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {`${formatCLP(nom.totalAmount)} · ${nom.invoiceCount} facturas`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {NOMINA_STATUS_LABELS[nom.status] ?? nom.status}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                })()}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {filtered.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={isAdmin ? 10 : 9} className="text-center py-10 text-muted-foreground">
+                              No hay facturas aprobadas
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
 
-          {!loading && !error && (
-            <>
-              {/* Desktop table */}
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead
-                        aria-sort={getSortAriaValue('proveedor')}
-                        className="min-w-[180px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                        onClick={() => handleSort('proveedor')}
-                      >
-                        Proveedor<SortIcon column="proveedor" />
-                      </TableHead>
-                      <TableHead
-                        aria-sort={getSortAriaValue('tipo')}
-                        className="cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                        onClick={() => handleSort('tipo')}
-                      >
-                        Tipo<SortIcon column="tipo" />
-                      </TableHead>
-                      <TableHead
-                        aria-sort={getSortAriaValue('monto')}
-                        className="text-right cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                        onClick={() => handleSort('monto')}
-                      >
-                        Monto<SortIcon column="monto" />
-                      </TableHead>
-                      <TableHead
-                        aria-sort={getSortAriaValue('emision')}
-                        className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                        onClick={() => handleSort('emision')}
-                      >
-                        Emisión<SortIcon column="emision" />
-                      </TableHead>
-                      <TableHead
-                        aria-sort={getSortAriaValue('aprobado_el')}
-                        className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                        onClick={() => handleSort('aprobado_el')}
-                      >
-                        Aprobado el<SortIcon column="aprobado_el" />
-                      </TableHead>
-                      <TableHead className="text-center">Aprobado por</TableHead>
-                      <TableHead className="text-center">IA</TableHead>
-                      <TableHead
-                        aria-sort={getSortAriaValue('plazo')}
-                        className="hidden lg:table-cell text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
-                        onClick={() => handleSort('plazo')}
-                      >
-                        Plazo<SortIcon column="plazo" />
-                      </TableHead>
-                      <TableHead className="w-[60px]">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((inv) => (
-                      <TableRow key={inv.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium truncate max-w-[180px]">
-                              {inv.supplierName}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {inv.issuerTaxIdentifier}
-                              {' · N° '}
-                              {inv.documentNumber}
-                            </span>
+                  {/* Mobile cards */}
+                  <div className="flex flex-col gap-3 p-4 md:hidden">
+                    {filtered.map((inv) => {
+                      const isLocked = lockedInvoiceIds.has(inv.id);
+                      return (
+                        <div key={inv.id} className={cn('rounded-lg border bg-card p-4 shadow-sm', isLocked && 'opacity-60')}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{inv.supplierName}</span>
+                                {(() => {
+                                  const nom = invoiceToNominaMap.get(inv.id);
+                                  if (!nom) return null;
+                                  return (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="secondary" className="text-xs cursor-default">
+                                          En nómina
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-left">
+                                        <p className="font-medium">
+                                          {`Nómina del ${formatDate(nom.createdAt)}`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {`${formatCLP(nom.totalAmount)} · ${nom.invoiceCount} facturas`}
+                                        </p>
+                                        <p className="text-muted-foreground">
+                                          {NOMINA_STATUS_LABELS[nom.status] ?? nom.status}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                })()}
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {inv.issuerTaxIdentifier}
+                                {' · N° '}
+                                {inv.documentNumber}
+                              </span>
+                            </div>
+                            {isAdmin && !isLocked && (
+                              <Checkbox
+                                checked={selectedInvoiceIds.has(inv.id)}
+                                onCheckedChange={(v) => handleRowCheckboxChange(inv.id, Boolean(v))}
+                                aria-label={`Seleccionar factura ${inv.documentNumber}`}
+                              />
+                            )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="whitespace-nowrap">
-                            {inv.documentType}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-center">
-                          <span className="text-sm">{formatDate(inv.issueDate)}</span>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-center">
-                          <span className="text-sm">{formatDate(inv.approvedAt)}</span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {inv.approver ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Avatar className="h-7 w-7 cursor-default">
-                                    <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                          <div className="mt-3 flex items-center justify-between">
+                            <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>
+                            <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                          </div>
+                          <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+                            <div className="flex items-center justify-between">
+                              <span>
+                                {'Emisión: '}
+                                <strong>{formatDate(inv.issueDate)}</strong>
+                              </span>
+                              <span className={cn(deadlineClass(inv.executiveTitleDate))}>
+                                {'Plazo: '}
+                                <strong>{formatDate(inv.executiveTitleDate)}</strong>
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>
+                                {'Aprobado: '}
+                                <strong>{formatDate(inv.approvedAt)}</strong>
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {inv.approver && (
+                                  <Avatar className="h-5 w-5">
+                                    <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
                                       {getUserInitials(inv.approver)}
                                     </AvatarFallback>
                                   </Avatar>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-left">
-                                  <p className="font-medium">{getUserDisplayName(inv.approver)}</p>
-                                  <p className="text-muted-foreground">{inv.approver.email}</p>
-                                  <p className="capitalize text-muted-foreground">
-                                    {inv.approver.role}
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
+                                )}
+                                {inv.aiValidated
+                                  ? <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-600" />
+                                  : <XCircleIcon className="h-3.5 w-3.5 text-red-500" />}
+                              </div>
+                            </div>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {inv.aiValidated ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <CheckCircle2Icon className="h-4 w-4 text-emerald-600 mx-auto" />
-                              </TooltipTrigger>
-                              <TooltipContent>Validado por IA</TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <XCircleIcon className="h-4 w-4 text-red-500 mx-auto" />
-                              </TooltipTrigger>
-                              <TooltipContent>No validado por IA</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-center">
-                          <span className={cn('text-sm', deadlineClass(inv.executiveTitleDate))}>
-                            {formatDate(inv.executiveTitleDate)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                disabled={actionLoading === inv.id}
-                              >
-                                <MoreHorizontalIcon className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleMarkAsPaid(inv)}>
-                                Marcar como pagada
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                        </div>
+                      );
+                    })}
                     {filtered.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
-                          No hay facturas aprobadas
-                        </TableCell>
-                      </TableRow>
+                      <p className="py-10 text-center text-muted-foreground">
+                        No hay facturas aprobadas
+                      </p>
                     )}
-                  </TableBody>
-                </Table>
-              </div>
+                  </div>
+                </>
+              )}
+            </div>
 
-              {/* Mobile cards */}
-              <div className="flex flex-col gap-3 p-4 md:hidden">
-                {filtered.map((inv) => (
-                  <div key={inv.id} className="rounded-lg border bg-card p-4 shadow-sm">
-                    <div className="flex items-start justify-between">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium">{inv.supplierName}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {inv.issuerTaxIdentifier}
-                          {' · N° '}
-                          {inv.documentNumber}
-                        </span>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            disabled={actionLoading === inv.id}
-                          >
-                            <MoreHorizontalIcon className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleMarkAsPaid(inv)}>
-                            Marcar como pagada
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>
-                      <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
-                    </div>
-                    <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
-                      <div className="flex items-center justify-between">
-                        <span>
-                          {'Emisión: '}
-                          <strong>{formatDate(inv.issueDate)}</strong>
-                        </span>
-                        <span className={cn(deadlineClass(inv.executiveTitleDate))}>
-                          {'Plazo: '}
-                          <strong>{formatDate(inv.executiveTitleDate)}</strong>
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>
-                          {'Aprobado: '}
-                          <strong>{formatDate(inv.approvedAt)}</strong>
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {inv.approver && (
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
-                                {getUserInitials(inv.approver)}
-                              </AvatarFallback>
-                            </Avatar>
+            {/* Pagination footer */}
+            {pagination && pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between border-t px-4 py-3">
+                <span className="text-sm text-muted-foreground">
+                  {`Página ${pagination.page} de ${pagination.totalPages}`
+                    + ` — ${pagination.total} facturas`}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1 || loading}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                  >
+                    <ChevronLeftIcon className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= pagination.totalPages || loading}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                  >
+                    Siguiente
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Nóminas tab */}
+          <TabsContent value={NOMINA_TAB.NOMINAS} className="flex flex-col flex-1 min-h-0 overflow-auto">
+            <div className="p-4">
+              {nominasLoading && (
+                <div className="flex items-center justify-center py-20">
+                  <p className="text-muted-foreground">Cargando nóminas...</p>
+                </div>
+              )}
+              {!nominasLoading && (
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-center">N° Facturas</TableHead>
+                        <TableHead className="text-center">Estado</TableHead>
+                        {isAdmin && <TableHead className="w-[60px]">Acciones</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {nominas.map((nom) => (
+                        <TableRow key={nom.id}>
+                          <TableCell>
+                            <span className="text-sm">{formatDate(nom.createdAt)}</span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="text-sm font-medium">{formatCLP(nom.totalAmount)}</span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="text-sm">{nom.invoiceCount}</span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <NominaStatusBadge status={nom.status} />
+                          </TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontalIcon className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {nom.status === NOMINA_STATUS.PENDING && (
+                                    <DropdownMenuItem
+                                      onClick={() => setPayDialog({
+                                        open: true,
+                                        nomina: nom,
+                                        file: null,
+                                        uploading: false,
+                                        mismatch: null,
+                                        error: null,
+                                      })}
+                                    >
+                                      Marcar como pagada
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setDeleteDialog({
+                                      open: true, nomina: nom, deleting: false,
+                                    })}
+                                  >
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
                           )}
-                          {inv.aiValidated
-                            ? <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-600" />
-                            : <XCircleIcon className="h-3.5 w-3.5 text-red-500" />}
+                        </TableRow>
+                      ))}
+                      {nominas.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-muted-foreground">
+                            No hay nóminas creadas
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Mobile nóminas */}
+              {!nominasLoading && (
+                <div className="flex flex-col gap-3 md:hidden">
+                  {nominas.map((nom) => (
+                    <div key={nom.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                      <div className="flex items-start justify-between">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-medium">{formatDate(nom.createdAt)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {nom.invoiceCount}
+                            {' facturas'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <NominaStatusBadge status={nom.status} />
+                          {isAdmin && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                  <MoreHorizontalIcon className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {nom.status === NOMINA_STATUS.PENDING && (
+                                  <DropdownMenuItem
+                                    onClick={() => setPayDialog({
+                                      open: true,
+                                      nomina: nom,
+                                      file: null,
+                                      uploading: false,
+                                      mismatch: null,
+                                      error: null,
+                                    })}
+                                  >
+                                    Marcar como pagada
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setDeleteDialog({
+                                    open: true, nomina: nom, deleting: false,
+                                  })}
+                                >
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </div>
+                      <div className="mt-3">
+                        <span className="text-lg font-semibold">{formatCLP(nom.totalAmount)}</span>
+                      </div>
                     </div>
+                  ))}
+                  {nominas.length === 0 && (
+                    <p className="py-10 text-center text-muted-foreground">No hay nóminas creadas</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Pay Nómina Dialog */}
+        <Dialog
+          open={payDialog.open}
+          onOpenChange={(open) => {
+            if (!open && !payDialog.uploading) {
+              setPayDialog({
+                open: false,
+                nomina: null,
+                file: null,
+                uploading: false,
+                mismatch: null,
+                error: null,
+              });
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Marcar nómina como pagada</DialogTitle>
+            </DialogHeader>
+            {payDialog.nomina && (
+              <div className="flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground">
+                  {'Total nómina: '}
+                  <strong className="text-foreground">
+                    {formatCLP(payDialog.nomina.totalAmount)}
+                  </strong>
+                  {` (${payDialog.nomina.invoiceCount} facturas)`}
+                </p>
+
+                {/* File input */}
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="voucher-file">
+                    Comprobante de pago
+                  </label>
+                  <label
+                    htmlFor="voucher-file"
+                    className={cn(
+                      'flex items-center gap-2 cursor-pointer rounded-md border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-muted/50 transition-colors',
+                      payDialog.file && 'border-solid border-primary/50 bg-primary/5 text-foreground',
+                    )}
+                  >
+                    <PaperclipIcon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {payDialog.file ? payDialog.file.name : 'Seleccionar archivo (PDF o imagen)'}
+                    </span>
+                    <input
+                      id="voucher-file"
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] ?? null;
+                        setPayDialog((s) => ({
+                          ...s,
+                          file: f,
+                          mismatch: null,
+                          error: null,
+                        }));
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* Amount mismatch error */}
+                {payDialog.mismatch && (
+                  <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                    <p className="font-medium">El monto del comprobante no coincide</p>
+                    <p>
+                      {'Monto extraído: '}
+                      <strong>{formatCLP(payDialog.mismatch.extracted)}</strong>
+                    </p>
+                    <p>
+                      {'Monto esperado: '}
+                      <strong>{formatCLP(payDialog.mismatch.expected)}</strong>
+                    </p>
                   </div>
-                ))}
-                {filtered.length === 0 && (
-                  <p className="py-10 text-center text-muted-foreground">
-                    No hay facturas aprobadas
-                  </p>
+                )}
+
+                {/* General error */}
+                {payDialog.error && !payDialog.mismatch && (
+                  <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                    {payDialog.error}
+                  </div>
                 )}
               </div>
-            </>
-          )}
-        </div>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setPayDialog({
+                  open: false,
+                  nomina: null,
+                  file: null,
+                  uploading: false,
+                  mismatch: null,
+                  error: null,
+                })}
+                disabled={payDialog.uploading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handlePayConfirm}
+                disabled={!payDialog.file || payDialog.uploading}
+              >
+                {payDialog.uploading && <LoaderIcon className="h-4 w-4 animate-spin" />}
+                Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-        {/* Pagination footer */}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
-            <span className="text-sm text-muted-foreground">
-              {`Página ${pagination.page} de ${pagination.totalPages} — ${pagination.total} facturas`}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1 || loading}
-                onClick={() => setCurrentPage((p) => p - 1)}
+        {/* Delete Nómina AlertDialog */}
+        <AlertDialog
+          open={deleteDialog.open}
+          onOpenChange={(open) => {
+            if (!open && !deleteDialog.deleting) {
+              setDeleteDialog({ open: false, nomina: null, deleting: false });
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar nómina?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción eliminará la nómina. Las facturas asociadas quedarán disponibles
+                para ser incluidas en una nueva nómina.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteDialog.deleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-white hover:bg-destructive/90"
+                onClick={handleDeleteConfirm}
+                disabled={deleteDialog.deleting}
               >
-                <ChevronLeftIcon className="h-4 w-4" />
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= pagination.totalPages || loading}
-                onClick={() => setCurrentPage((p) => p + 1)}
-              >
-                Siguiente
-                <ChevronRightIcon className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+                {deleteDialog.deleting && <LoaderIcon className="h-4 w-4 animate-spin" />}
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );
