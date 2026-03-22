@@ -9,6 +9,11 @@
  *   - Latest same month  → fetch current month only
  *   - Latest earlier     → fetch from latest invoice month to current month (inclusive)
  *
+ * After sync, checks mérito (título ejecutivo) dates for pending invoices:
+ *   - Fires configured meritoAction if within meritoDaysBefore window
+ *   - Sends alert email if meritoAlertEnabled and within meritoAlertDaysBefore window
+ *   - Applies meritoCompletedAction for invoices past their executive_title_date
+ *
  * Errors are caught and logged — SII sync is best-effort and never fails the list endpoint.
  */
 
@@ -18,6 +23,7 @@ import { decrypt } from '../../../commons/encryption/index.js';
 import { supabase } from '../../../lib/supabase.js';
 import * as orgDb from '../../../db/organization.db.js';
 import * as invoiceDb from '../../../db/invoice.db.js';
+import * as ruleDb from '../../../db/organization-rule.db.js';
 import { parseChileanRut } from '../../sii/helpers/parse-rut.js';
 import getSiiInvoices from '../../sii/actions/get-sii-invoices.js';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.js';
@@ -25,6 +31,11 @@ import { upsertOrgSupplier } from './upsert-org-supplier.js';
 import { upsertInvoice } from './upsert-invoice.js';
 import { validatePendingInvoicesSiiStatus } from './validate-pending-invoices-sii-status.js';
 import { validateInvoiceAi } from './validate-invoice-ai.js';
+import { rejectInvoice } from './reject-invoice.js';
+import { approveInvoice } from './approve-invoice.js';
+import { sendEmail } from '../../../commons/email/send-email.js';
+
+const MERITO_ACTION_USER_ID = 'system';
 
 function currentPeriod(): string {
   const now = new Date();
@@ -40,13 +51,94 @@ function determinePeriods(latestIssueDate: string | null): {
   if (!latestIssueDate) {
     const now = new Date();
     const fourMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-    const from = `${fourMonthsAgo.getFullYear()}-${String(fourMonthsAgo.getMonth() + 1).padStart(2, '0')}`;
+    const from = `${fourMonthsAgo.getFullYear()}-${String(fourMonthsAgo.getMonth() + 1).padStart(2, '00')}`;
     return { from, to };
   }
 
   // issueDate is YYYY-MM-DD — extract YYYY-MM
   const latestPeriod = latestIssueDate.substring(0, 7);
   return { from: latestPeriod, to };
+}
+
+function daysUntilDate(dateStr: string): number {
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+async function processMeritoForInvoice(
+  invoice: { id: string; supplier_id: string; gross_amount: number; executive_title_date: string | null; document_number: string },
+  orgId: string,
+): Promise<void> {
+  if (!invoice.executive_title_date) return;
+
+  const rule = await ruleDb.findApplicableRule(
+    orgId,
+    invoice.supplier_id,
+    Number(invoice.gross_amount),
+  ).catch(() => null);
+
+  if (!rule) return;
+
+  const daysLeft = daysUntilDate(invoice.executive_title_date);
+
+  // Check if mérito has already passed
+  if (daysLeft < 0) {
+    if (rule.merito_completed_action === 'auto_approve') {
+      try {
+        await approveInvoice(invoice.id, orgId, MERITO_ACTION_USER_ID);
+        logger.info('Invoice auto-approved (merito completed)', { invoiceId: invoice.id });
+      } catch (err) {
+        logger.warn('Failed to auto-approve invoice after mérito', {
+          invoiceId: invoice.id,
+          error: getErrorMessage(err),
+        });
+      }
+    }
+    return;
+  }
+
+  // Check pre-merito action window
+  const actionDaysBefore = rule.merito_days_before ?? 0;
+  if (rule.merito_action !== 'nothing' && daysLeft <= actionDaysBefore) {
+    try {
+      if (rule.merito_action === 'reject_sii_and_supl' || rule.merito_action === 'reject_supl_only') {
+        await rejectInvoice(invoice.id, orgId, MERITO_ACTION_USER_ID);
+        logger.info('Invoice rejected by merito rule', {
+          invoiceId: invoice.id,
+          meritoAction: rule.merito_action,
+          daysLeft,
+        });
+      }
+    } catch (err) {
+      logger.warn('Failed to execute merito action on invoice', {
+        invoiceId: invoice.id,
+        error: getErrorMessage(err),
+      });
+    }
+  }
+
+  // Check merito alert window
+  if (rule.merito_alert_enabled && rule.merito_alert_emails && rule.merito_alert_emails.length > 0) {
+    const alertDaysBefore = rule.merito_alert_days_before ?? 0;
+    if (daysLeft <= alertDaysBefore) {
+      const subject = `Alerta: Título Ejecutivo próximo — Factura ${invoice.document_number}`;
+      const html = `
+        <p>La factura <strong>${invoice.document_number}</strong> alcanzará su título ejecutivo en <strong>${daysLeft} día(s)</strong>.</p>
+        <p>Fecha de título ejecutivo: ${invoice.executive_title_date}</p>
+        <p>Por favor revise y tome acción si es necesario.</p>
+      `;
+      sendEmail({
+        to: rule.merito_alert_emails,
+        subject,
+        html,
+      }).catch(() => {
+        // already logged inside sendEmail
+      });
+    }
+  }
 }
 
 export async function syncOrgInvoices(orgId: string): Promise<void> {
@@ -115,6 +207,26 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
 
     // Validate SII event status for all pending invoices
     await validatePendingInvoicesSiiStatus(orgId, siiToken);
+
+    // Process mérito rules for all pending invoices
+    const pendingInvoices = await invoiceDb.findPendingByOrganization(orgId);
+    for (const inv of pendingInvoices) {
+      processMeritoForInvoice(
+        {
+          id: inv.id,
+          supplier_id: inv.supplier_id,
+          gross_amount: Number(inv.gross_amount),
+          executive_title_date: (inv as unknown as { executive_title_date: string | null }).executive_title_date,
+          document_number: inv.document_number,
+        },
+        orgId,
+      ).catch((err) => {
+        logger.warn('Mérito processing error for invoice', {
+          invoiceId: inv.id,
+          error: getErrorMessage(err),
+        });
+      });
+    }
 
     // Record the time of this successful sync
     await supabase

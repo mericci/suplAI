@@ -1,13 +1,8 @@
 /**
- * Sync Org Invoices Action
+ * Sync Org Invoices Action (Edge Function)
  *
- * Transparently syncs invoices from SII (Chile's tax authority) for an organization
- * before the list endpoint returns its results.
- *
- * Period determination:
- *   - No invoices in DB  → fetch from (currentYear - 1)-01 to current month
- *   - Latest same month  → fetch current month only
- *   - Latest earlier     → fetch from latest invoice month to current month (inclusive)
+ * Transparently syncs invoices from SII (Chile's tax authority) for an organization.
+ * Also processes mérito (título ejecutivo) rules for pending invoices.
  *
  * Errors are caught and logged — SII sync is best-effort and never fails the list endpoint.
  */
@@ -18,12 +13,18 @@ import { decrypt } from '../../../commons/encryption/index.ts';
 import { supabase } from '../../../lib/supabase.ts';
 import * as orgDb from '../../../db/organization.db.ts';
 import * as invoiceDb from '../../../db/invoice.db.ts';
+import * as ruleDb from '../../../db/organization-rule.db.ts';
 import { parseChileanRut } from '../../sii/helpers/parse-rut.ts';
 import getSiiInvoices from '../../sii/actions/get-sii-invoices.ts';
 import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.ts';
 import { upsertOrgSupplier } from './upsert-org-supplier.ts';
 import { upsertInvoice } from './upsert-invoice.ts';
 import { validateInvoiceAi } from './validate-invoice-ai.ts';
+import { rejectInvoice } from './reject-invoice.ts';
+import { approveInvoice } from './approve-invoice.ts';
+import { sendEmail } from '../../../commons/email/send-email.ts';
+
+const MERITO_ACTION_USER_ID = 'system';
 
 function currentPeriod(): string {
   const now = new Date();
@@ -43,9 +44,84 @@ function determinePeriods(latestIssueDate: string | null): {
     return { from, to };
   }
 
-  // issueDate is YYYY-MM-DD — extract YYYY-MM
   const latestPeriod = latestIssueDate.substring(0, 7);
   return { from: latestPeriod, to };
+}
+
+function daysUntilDate(dateStr: string): number {
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+async function processMeritoForInvoice(
+  invoice: { id: string; supplier_id: string; gross_amount: number; executive_title_date: string | null; document_number: string },
+  orgId: string,
+): Promise<void> {
+  if (!invoice.executive_title_date) return;
+
+  const rule = await ruleDb.findApplicableRule(
+    orgId,
+    invoice.supplier_id,
+    Number(invoice.gross_amount),
+  ).catch(() => null);
+
+  if (!rule) return;
+
+  const daysLeft = daysUntilDate(invoice.executive_title_date);
+
+  if (daysLeft < 0) {
+    if (rule.merito_completed_action === 'auto_approve') {
+      try {
+        await approveInvoice(invoice.id, orgId, MERITO_ACTION_USER_ID);
+        logger.info('Invoice auto-approved (merito completed)', { invoiceId: invoice.id });
+      } catch (err) {
+        logger.warn('Failed to auto-approve invoice after mérito', {
+          invoiceId: invoice.id,
+          error: getErrorMessage(err),
+        });
+      }
+    }
+    return;
+  }
+
+  const actionDaysBefore = rule.merito_days_before ?? 0;
+  if (rule.merito_action !== 'nothing' && daysLeft <= actionDaysBefore) {
+    try {
+      if (rule.merito_action === 'reject_sii_and_supl' || rule.merito_action === 'reject_supl_only') {
+        await rejectInvoice(invoice.id, orgId, MERITO_ACTION_USER_ID);
+        logger.info('Invoice rejected by merito rule', {
+          invoiceId: invoice.id,
+          meritoAction: rule.merito_action,
+          daysLeft,
+        });
+      }
+    } catch (err) {
+      logger.warn('Failed to execute merito action on invoice', {
+        invoiceId: invoice.id,
+        error: getErrorMessage(err),
+      });
+    }
+  }
+
+  if (rule.merito_alert_enabled && rule.merito_alert_emails && rule.merito_alert_emails.length > 0) {
+    const alertDaysBefore = rule.merito_alert_days_before ?? 0;
+    if (daysLeft <= alertDaysBefore) {
+      const subject = `Alerta: Título Ejecutivo próximo — Factura ${invoice.document_number}`;
+      const html = `
+        <p>La factura <strong>${invoice.document_number}</strong> alcanzará su título ejecutivo en <strong>${daysLeft} día(s)</strong>.</p>
+        <p>Fecha de título ejecutivo: ${invoice.executive_title_date}</p>
+        <p>Por favor revise y tome acción si es necesario.</p>
+      `;
+      sendEmail({
+        to: rule.merito_alert_emails,
+        subject,
+        html,
+      }).catch(() => {});
+    }
+  }
 }
 
 export async function syncOrgInvoices(orgId: string): Promise<void> {
@@ -110,6 +186,26 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
           logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
         });
       }
+    }
+
+    // Process mérito rules for all pending invoices
+    const pendingInvoices = await invoiceDb.findPendingByOrganization(orgId);
+    for (const inv of pendingInvoices) {
+      processMeritoForInvoice(
+        {
+          id: inv.id,
+          supplier_id: inv.supplier_id,
+          gross_amount: Number(inv.gross_amount),
+          executive_title_date: (inv as unknown as { executive_title_date: string | null }).executive_title_date,
+          document_number: inv.document_number,
+        },
+        orgId,
+      ).catch((err) => {
+        logger.warn('Mérito processing error for invoice', {
+          invoiceId: inv.id,
+          error: getErrorMessage(err),
+        });
+      });
     }
 
     // Record the time of this successful sync
