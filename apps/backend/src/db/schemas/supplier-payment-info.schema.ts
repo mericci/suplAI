@@ -7,6 +7,7 @@ export const UpsertSupplierPaymentInfoSchema = z.object({
   accountType: z.enum(['cuenta_corriente', 'cuenta_vista', 'cuenta_ahorro', 'cuenta_rut']),
   accountNumber: z.string().min(1).max(50),
   currency: z.enum(['CLP', 'USD', 'UF']).default('CLP'),
+  email: z.string().email().optional().nullable(),
 });
 
 export type UpsertSupplierPaymentInfoInput = z.infer<typeof UpsertSupplierPaymentInfoSchema>;
