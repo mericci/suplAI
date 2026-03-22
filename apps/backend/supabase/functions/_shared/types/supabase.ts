@@ -18,6 +18,9 @@ export type Json =
 
 export type InvoiceStatus = 'pending' | 'approved' | 'rejected' | 'paid';
 export type NominaStatus = 'pending' | 'paid';
+export type MeritoAction = 'nothing' | 'reject_sii_and_supl' | 'reject_supl_only';
+export type MeritoCompletedAction = 'nothing' | 'wait_manual' | 'auto_approve';
+export type AiApproveAction = 'nothing' | 'mark_approved';
 
 export interface Database {
   public: {
@@ -362,6 +365,72 @@ export interface Database {
           currency?: string;
           periodicity?: 'monthly' | 'quarterly' | 'annual';
           supplier_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
+    };
+      organization_rules: {
+        Row: {
+          id: string;
+          org_id: string;
+          supplier_id: string | null;
+          min_amount: number;
+          max_amount: number | null;
+          ai_tolerance_pct: number;
+          ai_max_amount: number | null;
+          notify_sii_on_approve: boolean;
+          notify_sii_on_reject: boolean;
+          merito_action: MeritoAction;
+          merito_days_before: number | null;
+          merito_alert_enabled: boolean;
+          merito_alert_days_before: number | null;
+          merito_alert_emails: string[] | null;
+          merito_completed_action: MeritoCompletedAction;
+          ai_approve_action: AiApproveAction;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          supplier_id?: string | null;
+          min_amount?: number;
+          max_amount?: number | null;
+          ai_tolerance_pct?: number;
+          ai_max_amount?: number | null;
+          notify_sii_on_approve?: boolean;
+          notify_sii_on_reject?: boolean;
+          merito_action?: MeritoAction;
+          merito_days_before?: number | null;
+          merito_alert_enabled?: boolean;
+          merito_alert_days_before?: number | null;
+          merito_alert_emails?: string[] | null;
+          merito_completed_action?: MeritoCompletedAction;
+          ai_approve_action?: AiApproveAction;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          org_id?: string;
+          supplier_id?: string | null;
+          min_amount?: number;
+          max_amount?: number | null;
+          ai_tolerance_pct?: number;
+          ai_max_amount?: number | null;
+          notify_sii_on_approve?: boolean;
+          notify_sii_on_reject?: boolean;
+          merito_action?: MeritoAction;
+          merito_days_before?: number | null;
+          merito_alert_enabled?: boolean;
+          merito_alert_days_before?: number | null;
+          merito_alert_emails?: string[] | null;
+          merito_completed_action?: MeritoCompletedAction;
+          ai_approve_action?: AiApproveAction;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
