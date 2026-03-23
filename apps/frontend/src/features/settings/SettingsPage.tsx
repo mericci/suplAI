@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { PlusIcon, Trash2Icon, ChevronDownIcon, ChevronUpIcon, SaveIcon, InfoIcon, BotIcon, BellIcon, ScaleIcon, ShieldIcon } from 'lucide-react';
+import {
+  PlusIcon, Trash2Icon, ChevronDownIcon, ChevronUpIcon, SaveIcon,
+  InfoIcon, BotIcon, BellIcon, ScaleIcon, ShieldIcon, BuildingIcon,
+} from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
@@ -9,27 +12,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { getMe } from '@/integrations/backend/users';
-import { getSettings, updateSettings } from '@/integrations/backend/settings';
-import type { OrganizationRule, UpsertOrganizationRulePayload, MeritoAction, MeritoCompletedAction, AiApproveAction } from '@supl/shared';
+import { listSuppliersByOrg } from '@/integrations/backend/suppliers';
+import {
+  getSettings, updateSettings,
+  getSupplierSettings, updateSupplierSettings,
+} from '@/integrations/backend/settings';
+import type { Supplier } from '@/integrations/backend/suppliers';
+import type {
+  OrganizationRule, UpsertOrganizationRulePayload,
+  MeritoAction, MeritoCompletedAction, AiApproveAction,
+} from '@supl/shared';
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
 
 const MERITO_ACTION_OPTIONS: { value: MeritoAction; label: string }[] = [
   { value: 'nothing', label: 'Sin acción' },
@@ -64,7 +68,9 @@ const SYSTEM_DEFAULTS: UpsertOrganizationRulePayload = {
   aiApproveAction: 'nothing',
 };
 
-// Stable local key for React reconciliation (not persisted)
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+/** Local wrapper adding a stable key for React reconciliation */
 interface RuleEntry {
   localId: string;
   payload: UpsertOrganizationRulePayload;
@@ -92,11 +98,12 @@ function ruleToPayload(r: OrganizationRule): UpsertOrganizationRulePayload {
   };
 }
 
-function isBaseRule(rule: UpsertOrganizationRulePayload): boolean {
-  return rule.minAmount === 0 && rule.maxAmount == null;
+function toEntries(rules: OrganizationRule[]): RuleEntry[] {
+  if (rules.length === 0) return [newEntry({ ...SYSTEM_DEFAULTS })];
+  return rules.map((r) => newEntry(ruleToPayload(r)));
 }
 
-// ─── Section header ────────────────────────────────────────────────────────────
+// ─── Sub-components ────────────────────────────────────────────────────────────
 
 interface SectionHeaderProps {
   icon: React.ReactNode;
@@ -117,21 +124,20 @@ function SectionHeader({ icon, title, description, accent }: SectionHeaderProps)
   );
 }
 
-// ─── Rule card ─────────────────────────────────────────────────────────────────
-
 interface RuleCardProps {
   entry: RuleEntry;
+  /** true = base/catch-all rule: hide amount range inputs, enforce min=0 max=null */
+  isBase: boolean;
   index: number;
   totalRules: number;
   onChange: (localId: string, rule: UpsertOrganizationRulePayload) => void;
   onRemove: (localId: string) => void;
 }
 
-function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProps): React.JSX.Element {
+function RuleCard({ entry, isBase, index, totalRules, onChange, onRemove }: RuleCardProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(true);
   const { localId, payload: rule } = entry;
   const uid = useId();
-  const isBase = isBaseRule(rule) && index === 0;
   const canDelete = !isBase || totalRules > 1;
   const contentId = `${uid}-content`;
 
@@ -143,15 +149,18 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
   }
 
   const emailsStr = rule.meritoAlertEmails?.join(', ') ?? '';
-  const rangeLabel = rule.maxAmount != null
-    ? `${rule.minAmount.toLocaleString('es-CL')} — ${rule.maxAmount.toLocaleString('es-CL')} CLP`
-    : rule.minAmount === 0
-      ? 'Todas las facturas'
-      : `Desde ${rule.minAmount.toLocaleString('es-CL')} CLP en adelante`;
+
+  const rangeLabel = isBase
+    ? 'Predeterminada — todas las facturas'
+    : rule.maxAmount != null
+      ? `${rule.minAmount.toLocaleString('es-CL')} — ${rule.maxAmount.toLocaleString('es-CL')} CLP`
+      : rule.minAmount > 0
+        ? `Desde ${rule.minAmount.toLocaleString('es-CL')} CLP en adelante`
+        : 'Todas las facturas';
 
   return (
     <div className={`rounded-xl border bg-card overflow-hidden transition-shadow hover:shadow-sm ${isBase ? 'border-border' : 'border-border/60'}`}>
-      {/* Card header — div wrapper so expand toggle and delete are sibling buttons (no nesting) */}
+      {/* Header row — expand toggle + delete as sibling buttons */}
       <div className="flex items-center gap-2 px-4 py-3.5">
         <button
           type="button"
@@ -166,30 +175,24 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
             </span>
           ) : (
             <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Rango {index + 1}
+              Rango {index}
             </span>
           )}
           <span className="flex-1 truncate text-sm font-medium">{rangeLabel}</span>
 
-          {/* Quick summary badges */}
+          {/* Quick-glance summary badges */}
           <div className="hidden sm:flex items-center gap-1.5 shrink-0">
             <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
               IA {rule.aiTolerancePct}%
             </span>
             {rule.notifySiiOnApprove && (
-              <span className="rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 px-1.5 py-0.5 text-[11px] font-medium">
-                ACD
-              </span>
+              <span className="rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 px-1.5 py-0.5 text-[11px] font-medium">ACD</span>
             )}
             {rule.notifySiiOnReject && (
-              <span className="rounded bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-400 px-1.5 py-0.5 text-[11px] font-medium">
-                RCD
-              </span>
+              <span className="rounded bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-400 px-1.5 py-0.5 text-[11px] font-medium">RCD</span>
             )}
             {rule.meritoAction !== 'nothing' && (
-              <span className="rounded bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 px-1.5 py-0.5 text-[11px] font-medium">
-                Mérito
-              </span>
+              <span className="rounded bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 px-1.5 py-0.5 text-[11px] font-medium">Mérito</span>
             )}
           </div>
 
@@ -198,14 +201,13 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
             : <ChevronDownIcon className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />}
         </button>
 
-        {/* Delete — sibling button, not nested */}
         {canDelete && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <button
                 type="button"
                 className="rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                aria-label={`Eliminar ${isBase ? 'regla base' : `rango ${index + 1}`}`}
+                aria-label={`Eliminar ${isBase ? 'regla base' : `rango ${index}`}`}
               >
                 <Trash2Icon className="h-3.5 w-3.5" />
               </button>
@@ -214,7 +216,7 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
               <AlertDialogHeader>
                 <AlertDialogTitle>¿Eliminar este rango?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Se eliminará la configuración para &ldquo;{rangeLabel}&rdquo;. Esta acción no se puede deshacer hasta que guardes los cambios.
+                  Se eliminará la configuración para &ldquo;{rangeLabel}&rdquo;. Los cambios no son permanentes hasta que guardes.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -231,45 +233,46 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
         )}
       </div>
 
-      {/* Expanded content */}
       {expanded && (
         <div id={contentId} className="border-t divide-y divide-border/50">
 
-          {/* Amount range */}
-          <div className="px-4 py-4 space-y-3">
-            <SectionHeader
-              icon={<ScaleIcon className="h-3.5 w-3.5" />}
-              title="Rango de monto"
-              description="Facturas dentro de este rango de monto usarán estas reglas."
-              accent="bg-slate-50 dark:bg-slate-900/40"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div className="space-y-1.5">
-                <Label htmlFor={`${uid}-min`} className="text-xs">Monto mínimo (CLP)</Label>
-                <Input
-                  id={`${uid}-min`}
-                  type="number"
-                  min={0}
-                  value={rule.minAmount}
-                  onChange={(e) => set('minAmount', Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${uid}-max`} className="text-xs">
-                  Monto máximo
-                  <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">(vacío = sin límite)</span>
-                </Label>
-                <Input
-                  id={`${uid}-max`}
-                  type="number"
-                  min={0}
-                  value={rule.maxAmount ?? ''}
-                  onChange={(e) => set('maxAmount', e.target.value === '' ? null : Number(e.target.value))}
-                  placeholder="Sin límite"
-                />
+          {/* Amount range — only for non-base rules */}
+          {!isBase && (
+            <div className="px-4 py-4 space-y-3">
+              <SectionHeader
+                icon={<ScaleIcon className="h-3.5 w-3.5" />}
+                title="Rango de monto"
+                description="Facturas dentro de este rango usarán estas reglas en lugar de las predeterminadas."
+                accent="bg-slate-50 dark:bg-slate-900/40"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${uid}-min`} className="text-xs">Monto mínimo (CLP)</Label>
+                  <Input
+                    id={`${uid}-min`}
+                    type="number"
+                    min={0}
+                    value={rule.minAmount}
+                    onChange={(e) => set('minAmount', Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${uid}-max`} className="text-xs">
+                    Monto máximo
+                    <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">(vacío = sin límite)</span>
+                  </Label>
+                  <Input
+                    id={`${uid}-max`}
+                    type="number"
+                    min={0}
+                    value={rule.maxAmount ?? ''}
+                    onChange={(e) => set('maxAmount', e.target.value === '' ? null : Number(e.target.value))}
+                    placeholder="Sin límite"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* AI Validation */}
           <div className="px-4 py-4 space-y-3">
@@ -314,17 +317,10 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
                 Acción cuando IA aprueba
                 <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">predeterminado: sin acción</span>
               </Label>
-              <Select
-                value={rule.aiApproveAction}
-                onValueChange={(v) => set('aiApproveAction', v as AiApproveAction)}
-              >
-                <SelectTrigger id={`${uid}-ai-approve`}>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={rule.aiApproveAction} onValueChange={(v) => set('aiApproveAction', v as AiApproveAction)}>
+                <SelectTrigger id={`${uid}-ai-approve`}><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {AI_APPROVE_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
+                  {AI_APPROVE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -380,17 +376,10 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
                   Acción antes del vencimiento
                   <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">predeterminado: sin acción</span>
                 </Label>
-                <Select
-                  value={rule.meritoAction}
-                  onValueChange={(v) => set('meritoAction', v as MeritoAction)}
-                >
-                  <SelectTrigger id={`${uid}-merito-action`}>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={rule.meritoAction} onValueChange={(v) => set('meritoAction', v as MeritoAction)}>
+                  <SelectTrigger id={`${uid}-merito-action`}><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {MERITO_ACTION_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
+                    {MERITO_ACTION_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -415,17 +404,10 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
                 Si el vencimiento ya pasó sin acción
                 <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">predeterminado: esperar acción manual</span>
               </Label>
-              <Select
-                value={rule.meritoCompletedAction}
-                onValueChange={(v) => set('meritoCompletedAction', v as MeritoCompletedAction)}
-              >
-                <SelectTrigger id={`${uid}-merito-completed`}>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={rule.meritoCompletedAction} onValueChange={(v) => set('meritoCompletedAction', v as MeritoCompletedAction)}>
+                <SelectTrigger id={`${uid}-merito-completed`}><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {MERITO_COMPLETED_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
+                  {MERITO_COMPLETED_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -444,7 +426,6 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
                   <p className="text-xs text-muted-foreground">Envía un aviso por correo cuando la fecha de mérito se acerca.</p>
                 </div>
               </label>
-
               {rule.meritoAlertEnabled && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
                   <div className="space-y-1.5">
@@ -465,10 +446,7 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
                       type="text"
                       value={emailsStr}
                       onChange={(e) => {
-                        const emails = e.target.value
-                          .split(',')
-                          .map((s) => s.trim())
-                          .filter(Boolean);
+                        const emails = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
                         set('meritoAlertEmails', emails.length > 0 ? emails : null);
                       }}
                       placeholder="email@empresa.cl"
@@ -484,91 +462,363 @@ function RuleCard({ entry, index, totalRules, onChange, onRemove }: RuleCardProp
   );
 }
 
-// ─── Main page ─────────────────────────────────────────────────────────────────
+// ─── Rules list (shared between tabs) ──────────────────────────────────────────
 
-export function SettingsPage(): React.JSX.Element {
-  const [orgId, setOrgId] = useState<string | null>(null);
+interface RulesListProps {
+  entries: RuleEntry[];
+  isOnlyDefault: boolean;
+  onAdd: () => void;
+  onChange: (localId: string, rule: UpsertOrganizationRulePayload) => void;
+  onRemove: (localId: string) => void;
+}
+
+function RulesList({ entries, isOnlyDefault, onAdd, onChange, onRemove }: RulesListProps): React.JSX.Element {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="font-semibold">Reglas por monto</h2>
+          <p className="text-sm text-muted-foreground">
+            La regla base aplica a todas las facturas. Agrega rangos específicos para sobrescribir el comportamiento según el monto.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="shrink-0" onClick={onAdd}>
+          <PlusIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          Agregar rango
+        </Button>
+      </div>
+
+      {isOnlyDefault && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-3 text-sm" role="note">
+          <InfoIcon className="h-4 w-4 shrink-0 mt-0.5 text-primary/70" aria-hidden="true" />
+          <p className="text-muted-foreground">
+            Esta es la{' '}
+            <span className="font-medium text-foreground">configuración predeterminada del sistema</span>.
+            Aplica a todas las facturas. Modifícala o agrega rangos específicos para distintos montos.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {entries.map((entry, i) => (
+          <RuleCard
+            key={entry.localId}
+            entry={entry}
+            isBase={i === 0}
+            index={i}
+            totalRules={entries.length}
+            onChange={onChange}
+            onRemove={onRemove}
+          />
+        ))}
+      </div>
+
+      {entries.length > 1 && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+        >
+          <PlusIcon className="h-4 w-4" aria-hidden="true" />
+          Agregar rango
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Hook: rules state + load/save ─────────────────────────────────────────────
+
+function useRules(load: () => Promise<OrganizationRule[]>) {
   const [entries, setEntries] = useState<RuleEntry[]>([]);
-  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
 
-  const load = useCallback(async (): Promise<void> => {
-    setLoadStatus('loading');
+  const reload = useCallback(async () => {
+    setStatus('loading');
     try {
-      const meRes = await getMe();
-      if (!meRes.success || !meRes.data?.organization_id) {
-        setLoadStatus('error');
-        return;
-      }
-      const id = meRes.data.organization_id;
-      setOrgId(id);
-
-      const settingsRes = await getSettings(id);
-      if (settingsRes.success && settingsRes.data) {
-        const globalRules = settingsRes.data.filter((r) => !r.supplierId);
-        // If no rules are configured, show the system-default catch-all rule so users
-        // understand the default behavior instead of seeing an empty state.
-        setEntries(
-          globalRules.length > 0
-            ? globalRules.map((r) => newEntry(ruleToPayload(r)))
-            : [newEntry({ ...SYSTEM_DEFAULTS })],
-        );
-      } else {
-        setEntries([newEntry({ ...SYSTEM_DEFAULTS })]);
-      }
-      setLoadStatus('loaded');
+      const rules = await load();
+      setEntries(toEntries(rules));
+      setStatus('loaded');
     } catch {
-      setLoadStatus('error');
+      setStatus('error');
     }
-  }, []);
-
-  useEffect(() => {
-    load();
-    return () => {
-      if (successTimerRef.current) clearTimeout(successTimerRef.current);
-    };
   }, [load]);
 
-  function handleRuleChange(localId: string, rule: UpsertOrganizationRulePayload): void {
+  function handleChange(localId: string, rule: UpsertOrganizationRulePayload): void {
     setEntries((prev) => prev.map((e) => (e.localId === localId ? { ...e, payload: rule } : e)));
   }
 
-  function handleRuleRemove(localId: string): void {
+  function handleRemove(localId: string): void {
     setEntries((prev) => {
       const next = prev.filter((e) => e.localId !== localId);
+      // Ensure base rule always has min=0 max=null
       return next.length === 0 ? [newEntry({ ...SYSTEM_DEFAULTS })] : next;
     });
   }
 
-  function handleAddRule(): void {
-    setEntries((prev) => [...prev, newEntry({ ...SYSTEM_DEFAULTS })]);
+  function handleAdd(): void {
+    setEntries((prev) => [...prev, newEntry({ ...SYSTEM_DEFAULTS, minAmount: 0, maxAmount: null })]);
   }
 
-  async function handleSave(): Promise<void> {
-    if (!orgId || saving) return;
+  function payloads(): UpsertOrganizationRulePayload[] {
+    return entries.map((e, i) =>
+      // Always enforce base rule amounts
+      i === 0 ? { ...e.payload, minAmount: 0, maxAmount: null } : e.payload,
+    );
+  }
+
+  const isOnlyDefault = entries.length === 1;
+
+  return { entries, status, reload, handleChange, handleRemove, handleAdd, payloads, isOnlyDefault };
+}
+
+// ─── General tab ───────────────────────────────────────────────────────────────
+
+interface GeneralTabProps {
+  orgId: string;
+  onSaveStart: () => void;
+  onSaveEnd: (err: string | null) => void;
+  saveTriggered: number; // bump to trigger save
+}
+
+function GeneralTab({ orgId, onSaveStart, onSaveEnd, saveTriggered }: GeneralTabProps): React.JSX.Element {
+  const loadFn = useCallback(async () => {
+    const res = await getSettings(orgId);
+    return (res.data ?? []).filter((r) => !r.supplierId);
+  }, [orgId]);
+
+  const rules = useRules(loadFn);
+  const prevTrigger = useRef(0);
+
+  useEffect(() => {
+    rules.reload();
+  }, [rules.reload]);
+
+  useEffect(() => {
+    if (saveTriggered === 0 || saveTriggered === prevTrigger.current) return;
+    prevTrigger.current = saveTriggered;
+    onSaveStart();
+    updateSettings(orgId, rules.payloads())
+      .then((res) => onSaveEnd(res.success ? null : (res.error ?? 'Error al guardar.')))
+      .catch(() => onSaveEnd('Error inesperado al guardar.'));
+  }, [saveTriggered, orgId, onSaveStart, onSaveEnd, rules]);
+
+  if (rules.status === 'loading' || rules.status === 'idle') {
+    return <div className="space-y-3"><Skeleton className="h-14 w-full rounded-xl" /><Skeleton className="h-14 w-full rounded-xl" /></div>;
+  }
+
+  if (rules.status === 'error') {
+    return (
+      <div className="rounded-xl border border-dashed py-12 text-center text-sm text-muted-foreground">
+        No se pudo cargar la configuración.{' '}
+        <button type="button" className="underline underline-offset-2" onClick={rules.reload}>Reintentar</button>
+      </div>
+    );
+  }
+
+  return (
+    <RulesList
+      entries={rules.entries}
+      isOnlyDefault={rules.isOnlyDefault}
+      onAdd={rules.handleAdd}
+      onChange={rules.handleChange}
+      onRemove={rules.handleRemove}
+    />
+  );
+}
+
+// ─── Supplier tab ───────────────────────────────────────────────────────────────
+
+interface SupplierTabProps {
+  orgId: string;
+  onSaveStart: () => void;
+  onSaveEnd: (err: string | null) => void;
+  saveTriggered: number;
+  onSupplierChange: (hasSupplier: boolean) => void;
+}
+
+function SupplierTab({ orgId, onSaveStart, onSaveEnd, saveTriggered, onSupplierChange }: SupplierTabProps): React.JSX.Element {
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState(true);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const prevTrigger = useRef(0);
+
+  useEffect(() => {
+    setSuppliersLoading(true);
+    listSuppliersByOrg(orgId, { limit: 200 })
+      .then((res) => { if (res.success) setSuppliers(res.data); })
+      .finally(() => setSuppliersLoading(false));
+  }, [orgId]);
+
+  const loadFn = useCallback(async () => {
+    if (!selectedSupplierId) return [];
+    const res = await getSupplierSettings(orgId, selectedSupplierId);
+    return res.data ?? [];
+  }, [orgId, selectedSupplierId]);
+
+  const rules = useRules(loadFn);
+
+  useEffect(() => {
+    if (selectedSupplierId) {
+      rules.reload();
+      onSupplierChange(true);
+    } else {
+      onSupplierChange(false);
+    }
+  }, [selectedSupplierId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (saveTriggered === 0 || saveTriggered === prevTrigger.current || !selectedSupplierId) return;
+    prevTrigger.current = saveTriggered;
+    onSaveStart();
+    updateSupplierSettings(orgId, selectedSupplierId, rules.payloads())
+      .then((res) => onSaveEnd(res.success ? null : (res.error ?? 'Error al guardar.')))
+      .catch(() => onSaveEnd('Error inesperado al guardar.'));
+  }, [saveTriggered, orgId, selectedSupplierId, onSaveStart, onSaveEnd, rules]);
+
+  const filteredSuppliers = suppliers.filter((s) =>
+    s.legalName.toLowerCase().includes(search.toLowerCase()) ||
+    s.taxIdentifier.includes(search),
+  );
+
+  const selectedSupplier = suppliers.find((s) => s.id === selectedSupplierId);
+
+  return (
+    <div className="space-y-5">
+      {/* Supplier selector */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <BuildingIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          Seleccionar proveedor
+        </div>
+        {suppliersLoading ? (
+          <Skeleton className="h-9 w-full rounded-md" />
+        ) : (
+          <div className="space-y-2">
+            <Input
+              type="text"
+              placeholder="Buscar proveedor por nombre o RUT..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9"
+            />
+            {search && filteredSuppliers.length === 0 && (
+              <p className="text-xs text-muted-foreground px-1">No se encontraron proveedores.</p>
+            )}
+            {(search ? filteredSuppliers : suppliers).length > 0 && (
+              <Select
+                value={selectedSupplierId ?? ''}
+                onValueChange={(v) => { setSelectedSupplierId(v || null); setSearch(''); }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un proveedor..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(search ? filteredSuppliers : suppliers).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <span className="font-medium">{s.legalName}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{s.taxIdentifier}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        )}
+        {selectedSupplier && (
+          <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{selectedSupplier.legalName}</span>
+            <span>·</span>
+            <span>{selectedSupplier.taxIdentifier}</span>
+            <button
+              type="button"
+              onClick={() => setSelectedSupplierId(null)}
+              className="ml-auto text-muted-foreground hover:text-foreground underline underline-offset-2"
+            >
+              Cambiar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Rules for selected supplier */}
+      {!selectedSupplierId && (
+        <div className="rounded-xl border border-dashed py-16 text-center text-sm text-muted-foreground">
+          Selecciona un proveedor para configurar sus reglas específicas.
+          <br />
+          <span className="text-xs mt-1 block">
+            Las reglas de proveedor tienen prioridad sobre las reglas globales.
+          </span>
+        </div>
+      )}
+
+      {selectedSupplierId && (rules.status === 'loading' || rules.status === 'idle') && (
+        <div className="space-y-3">
+          <Skeleton className="h-14 w-full rounded-xl" />
+          <Skeleton className="h-14 w-full rounded-xl" />
+        </div>
+      )}
+
+      {selectedSupplierId && rules.status === 'error' && (
+        <div className="rounded-xl border border-dashed py-12 text-center text-sm text-muted-foreground">
+          No se pudo cargar la configuración.{' '}
+          <button type="button" className="underline underline-offset-2" onClick={rules.reload}>Reintentar</button>
+        </div>
+      )}
+
+      {selectedSupplierId && rules.status === 'loaded' && (
+        <RulesList
+          entries={rules.entries}
+          isOnlyDefault={rules.isOnlyDefault}
+          onAdd={rules.handleAdd}
+          onChange={rules.handleChange}
+          onRemove={rules.handleRemove}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
+export function SettingsPage(): React.JSX.Element {
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgLoading, setOrgLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'general' | 'proveedores'>('general');
+  const [supplierSelected, setSupplierSelected] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveTriggered, setSaveTriggered] = useState(0);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    getMe().then((res) => {
+      if (res.success && res.data?.organization_id) setOrgId(res.data.organization_id);
+    }).finally(() => setOrgLoading(false));
+    return () => { if (successTimer.current) clearTimeout(successTimer.current); };
+  }, []);
+
+  const handleSaveStart = useCallback(() => {
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
-    try {
-      const res = await updateSettings(orgId, entries.map((e) => e.payload));
-      if (res.success) {
-        setSaveSuccess(true);
-        if (successTimerRef.current) clearTimeout(successTimerRef.current);
-        successTimerRef.current = setTimeout(() => setSaveSuccess(false), 3000);
-      } else {
-        setSaveError(res.error ?? 'Error al guardar la configuración.');
-      }
-    } catch {
-      setSaveError('Error inesperado al guardar.');
-    } finally {
-      setSaving(false);
-    }
-  }
+  }, []);
 
-  const isDefaultOnly = entries.length === 1 && isBaseRule(entries[0].payload);
+  const handleSaveEnd = useCallback((err: string | null) => {
+    setSaving(false);
+    if (err) {
+      setSaveError(err);
+    } else {
+      setSaveSuccess(true);
+      if (successTimer.current) clearTimeout(successTimer.current);
+      successTimer.current = setTimeout(() => setSaveSuccess(false), 3000);
+    }
+  }, []);
+
+  const canSave = activeTab === 'general' || (activeTab === 'proveedores' && supplierSelected);
 
   return (
     <div className="flex h-full flex-col">
@@ -576,8 +826,8 @@ export function SettingsPage(): React.JSX.Element {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-2 h-4" />
         <h1 className="flex-1 text-lg font-semibold">Configuración</h1>
-        {loadStatus === 'loaded' && (
-          <Button size="sm" onClick={handleSave} disabled={saving}>
+        {!orgLoading && orgId && canSave && (
+          <Button size="sm" onClick={() => setSaveTriggered((n) => n + 1)} disabled={saving}>
             <SaveIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
             {saving ? 'Guardando...' : 'Guardar cambios'}
           </Button>
@@ -585,9 +835,9 @@ export function SettingsPage(): React.JSX.Element {
       </header>
 
       <div className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="mx-auto max-w-3xl space-y-5">
 
-          {/* Feedback banners */}
+          {/* Feedback */}
           {saveError && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">
               {saveError}
@@ -599,81 +849,45 @@ export function SettingsPage(): React.JSX.Element {
             </div>
           )}
 
-          {/* Loading */}
-          {loadStatus === 'loading' && (
+          {orgLoading && (
             <div className="space-y-3">
-              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-10 w-64 rounded-lg" />
               <Skeleton className="h-14 w-full rounded-xl" />
             </div>
           )}
 
-          {/* Error */}
-          {loadStatus === 'error' && (
+          {!orgLoading && !orgId && (
             <div className="rounded-xl border border-dashed py-12 text-center text-sm text-muted-foreground">
-              No se pudo cargar la configuración.{' '}
-              <button type="button" className="underline underline-offset-2" onClick={load}>
-                Reintentar
-              </button>
+              No se encontró la organización asociada a tu cuenta.
             </div>
           )}
 
-          {/* Content */}
-          {loadStatus === 'loaded' && (
-            <div className="space-y-4">
-              {/* Section header */}
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <h2 className="font-semibold">Reglas globales por monto</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Define cómo se procesan las facturas según su monto. La regla base aplica a todas
-                    las facturas que no coincidan con un rango más específico.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" className="shrink-0" onClick={handleAddRule}>
-                  <PlusIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Agregar rango
-                </Button>
-              </div>
+          {!orgLoading && orgId && (
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'general' | 'proveedores')}>
+              <TabsList>
+                <TabsTrigger value="general">General</TabsTrigger>
+                <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
+              </TabsList>
 
-              {/* Info callout shown when only the default base rule exists */}
-              {isDefaultOnly && (
-                <div className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-3 text-sm" role="note">
-                  <InfoIcon className="h-4 w-4 shrink-0 mt-0.5 text-primary/70" aria-hidden="true" />
-                  <p className="text-muted-foreground">
-                    Esta es la{' '}
-                    <span className="font-medium text-foreground">configuración predeterminada del sistema</span>.
-                    Aplica a todas las facturas. Puedes modificarla directamente o agregar rangos
-                    específicos según el monto para sobrescribir el comportamiento.
-                  </p>
-                </div>
-              )}
+              <TabsContent value="general" className="mt-5">
+                <GeneralTab
+                  orgId={orgId}
+                  onSaveStart={handleSaveStart}
+                  onSaveEnd={handleSaveEnd}
+                  saveTriggered={saveTriggered}
+                />
+              </TabsContent>
 
-              {/* Rule cards */}
-              <div className="space-y-3">
-                {entries.map((entry, i) => (
-                  <RuleCard
-                    key={entry.localId}
-                    entry={entry}
-                    index={i}
-                    totalRules={entries.length}
-                    onChange={handleRuleChange}
-                    onRemove={handleRuleRemove}
-                  />
-                ))}
-              </div>
-
-              {/* Bottom add shortcut (only when multiple rules) */}
-              {entries.length > 1 && (
-                <button
-                  type="button"
-                  onClick={handleAddRule}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
-                >
-                  <PlusIcon className="h-4 w-4" aria-hidden="true" />
-                  Agregar rango
-                </button>
-              )}
-            </div>
+              <TabsContent value="proveedores" className="mt-5">
+                <SupplierTab
+                  orgId={orgId}
+                  onSaveStart={handleSaveStart}
+                  onSaveEnd={handleSaveEnd}
+                  saveTriggered={saveTriggered}
+                  onSupplierChange={setSupplierSelected}
+                />
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       </div>
