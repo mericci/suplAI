@@ -14,6 +14,7 @@ import { registerSupplierRoutes } from './services/suppliers/routes.ts';
 import { registerInvoiceRoutes } from './services/invoices/routes.ts';
 import { registerBudgetRoutes } from './services/budget/routes.ts';
 import { registerNominaRoutes } from './services/nominas/routes.ts';
+import { registerSettingsRoutes } from './services/settings/routes.ts';
 
 export function createRouter(): Router {
   const router = new Router();
@@ -40,6 +41,7 @@ export function createRouter(): Router {
   registerInvoiceRoutes(router);
   registerBudgetRoutes(router);
   registerNominaRoutes(router);
+  registerSettingsRoutes(router);
 
   return router;
 }
