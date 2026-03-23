@@ -6,13 +6,20 @@
  *
  * Non-blocking: errors set status to 'error' with a generic Spanish note.
  * If no cost contract exists, leaves ai_validation_status as null.
+ *
+ * Reads aiTolerancePct and aiMaxAmount from the applicable organization rule.
+ * If aiApproveAction = 'mark_approved' and AI status is 'ok', auto-approves.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import * as invoiceDb from '../../../db/invoice.db.js';
 import * as supplierDocDb from '../../../db/supplier-document.db.js';
+import * as ruleDb from '../../../db/organization-rule.db.js';
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/error.js';
+import { approveInvoice } from './approve-invoice.js';
+
+const AI_AUTO_APPROVE_USER_ID = 'system';
 
 function getAnthropicClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -47,6 +54,29 @@ export async function validateInvoiceAi(
     const invoice = await invoiceDb.findById(invoiceId, organizationId);
     if (!invoice) throw new Error('Invoice not found');
 
+    const grossAmount = Number(invoice.gross_amount);
+
+    // Fetch applicable rule for tolerance and max amount config
+    const rule = await ruleDb.findApplicableRule(
+      organizationId,
+      invoice.supplier_id,
+      grossAmount,
+    ).catch(() => null);
+
+    const aiTolerancePct = rule?.ai_tolerance_pct ?? 5;
+    const aiMaxAmount = rule?.ai_max_amount != null ? Number(rule.ai_max_amount) : null;
+    const aiApproveAction = rule?.ai_approve_action ?? 'nothing';
+
+    // Skip AI if invoice exceeds configured max amount for AI validation
+    if (aiMaxAmount != null && grossAmount > aiMaxAmount) {
+      logger.info('AI validation skipped: invoice exceeds ai_max_amount', {
+        invoiceId,
+        grossAmount,
+        aiMaxAmount,
+      });
+      return;
+    }
+
     const contract = await supplierDocDb.findCurrentCostContract(invoice.supplier_id);
 
     if (!contract || !contract.amounts || contract.amounts.length === 0) {
@@ -61,6 +91,7 @@ export async function validateInvoiceAi(
       invoiceGrossAmount: invoice.gross_amount,
       contractAmounts: contract.amounts,
       ufRate,
+      aiTolerancePct,
     });
 
     const convertedAmounts = contract.amounts.map((a: { amount: number; currency: string; concept?: string; frequency?: string }) => {
@@ -85,7 +116,7 @@ SUPPLIER COST CONTRACT:
 - Amounts (converted to CLP): ${JSON.stringify(convertedAmounts)}
 ${ufRate ? `- UF rate used: 1 UF = ${ufRate} CLP` : ''}
 
-Allow ±5% tolerance when comparing the invoice gross amount against the contract clp_equivalent amounts.
+Allow ±${aiTolerancePct}% tolerance when comparing the invoice gross amount against the contract clp_equivalent amounts.
 Respond ONLY with valid JSON (no markdown, no explanation):
 {"status": "ok", "notes": "<one sentence in Spanish>"} or {"status": "error", "notes": "<one sentence in Spanish>"}`;
 
@@ -108,6 +139,23 @@ Respond ONLY with valid JSON (no markdown, no explanation):
     } as never);
 
     logger.info('AI validation complete', { invoiceId, status: parsed.status });
+
+    // Auto-approve if configured and AI approved
+    if (parsed.status === 'ok' && aiApproveAction === 'mark_approved') {
+      try {
+        // Re-fetch to confirm still pending
+        const current = await invoiceDb.findById(invoiceId, organizationId);
+        if (current?.status === 'pending') {
+          await approveInvoice(invoiceId, organizationId, AI_AUTO_APPROVE_USER_ID);
+          logger.info('Invoice auto-approved by AI', { invoiceId });
+        }
+      } catch (autoApproveError) {
+        logger.warn('AI auto-approve failed (non-blocking)', {
+          invoiceId,
+          error: getErrorMessage(autoApproveError),
+        });
+      }
+    }
   } catch (error) {
     logger.error('AI validation failed', { invoiceId, error: getErrorMessage(error) });
     try {
