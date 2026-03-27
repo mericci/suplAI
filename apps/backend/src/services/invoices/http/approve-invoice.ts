@@ -5,6 +5,7 @@
  */
 
 import { approveInvoice } from '../handlers/index.js';
+import * as userDb from '../../../db/user.db.js';
 import {
   successResponse,
   notFoundResponse,
@@ -23,7 +24,7 @@ export async function approveInvoiceHandler(
   context: RequestContext,
 ): Promise<Response> {
   try {
-    if (!context.userId) return unauthorizedResponse();
+    if (!context.email) return unauthorizedResponse();
 
     const url = new URL(req.url);
     const segments = url.pathname.split('/');
@@ -34,7 +35,10 @@ export async function approveInvoiceHandler(
     if (!orgId || !isValidUUID(orgId)) return validationError('Invalid organization ID');
     if (!id || !isValidUUID(id)) return validationError('Invalid invoice ID');
 
-    const invoice = await approveInvoice(id, orgId, context.userId);
+    const user = await userDb.findByEmail(context.email);
+    if (!user) return unauthorizedResponse();
+
+    const invoice = await approveInvoice(id, orgId, user.id);
     return successResponse(invoice, 'Invoice approved');
   } catch (error) {
     const msg = getErrorMessage(error);

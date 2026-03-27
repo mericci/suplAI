@@ -33,8 +33,8 @@ export async function deleteNominaHandler(
     if (!id || !isValidUUID(id)) return validationError('Invalid nomina ID');
 
     // Admin check
-    const user = await userDb.findById(context.userId!);
-    if (!user || user.role !== 'admin') {
+    const user = context.email ? await userDb.findByEmail(context.email) : null;
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('Forbidden', HttpStatus.FORBIDDEN);
     }
 

@@ -28,13 +28,13 @@ export async function createNominaHandler(
 
     if (!orgId || !isValidUUID(orgId)) return validationError('Invalid organization ID');
 
-    const user = await userDb.findById(context.userId!);
-    if (!user || user.role !== 'admin') {
+    const user = context.email ? await userDb.findByEmail(context.email) : null;
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('Forbidden', HttpStatus.FORBIDDEN);
     }
 
     const body = await req.json() as Record<string, unknown>;
-    const nomina = await createNomina(orgId, context.userId!, body);
+    const nomina = await createNomina(orgId, user.id, body);
     return successResponse(nomina, 'Nomina created', HttpStatus.CREATED);
   } catch (error) {
     const msg = getErrorMessage(error);
