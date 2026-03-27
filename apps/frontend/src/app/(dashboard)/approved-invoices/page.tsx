@@ -416,7 +416,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
         ];
         const uncachedApprovers = approverIds.filter((id) => !userCache.has(id));
         const userResults = await Promise.all(
-          uncachedApprovers.map((id) => getUser(id)),
+          uncachedApprovers.map((id) => getUser(orgId, id)),
         );
         userResults.forEach((r, i) => {
           if (r.success && r.data) userCache.set(uncachedApprovers[i], r.data);
