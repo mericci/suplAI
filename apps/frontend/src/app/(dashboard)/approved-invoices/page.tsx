@@ -269,6 +269,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
     nomina: null,
     deleting: false,
   });
+  const [downloadingNominaId, setDownloadingNominaId] = useState<string | null>(null);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSortChangeRef = useRef(false);
 
@@ -415,7 +416,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
         ];
         const uncachedApprovers = approverIds.filter((id) => !userCache.has(id));
         const userResults = await Promise.all(
-          uncachedApprovers.map((id) => getUser(id)),
+          uncachedApprovers.map((id) => getUser(orgId, id)),
         );
         userResults.forEach((r, i) => {
           if (r.success && r.data) userCache.set(uncachedApprovers[i], r.data);
@@ -598,6 +599,48 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
       setError(err instanceof Error ? err.message : 'Error al crear nómina');
     } finally {
       setCreatingNomina(false);
+    }
+  };
+
+  const handleDownloadNominaCsv = async (nom: NominaWithInvoiceIds): Promise<void> => {
+    const orgId = await getOrgId();
+    if (!orgId) return;
+    setDownloadingNominaId(nom.id);
+    try {
+      const invoiceIdsForCsv = nom.invoiceIds;
+      const allInvoicesForCsv: Invoice[] = [];
+      let page = 1;
+      const limit = 500;
+      let totalPages = 1;
+      do {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await getOrgInvoices(orgId, { page, limit, status: 'approved' });
+        if (!r.success || !r.data) break;
+        allInvoicesForCsv.push(...r.data.data.filter((inv) => invoiceIdsForCsv.includes(inv.id)));
+        totalPages = r.data.pagination.totalPages;
+        page += 1;
+      } while (page <= totalPages && allInvoicesForCsv.length < invoiceIdsForCsv.length);
+
+      const uniqueSupplierIds = [...new Set(allInvoicesForCsv.map((inv) => inv.supplierId))];
+      const uncachedSuppliers = uniqueSupplierIds.filter((id) => !supplierNameCache.has(id));
+      const supplierResults = await Promise.all(uncachedSuppliers.map((id) => getSupplier(id)));
+      supplierResults.forEach((r, i) => {
+        if (r.success && r.data) supplierNameCache.set(uncachedSuppliers[i], r.data.legalName);
+      });
+
+      const paymentInfoMap = new Map<string, Awaited<ReturnType<typeof getSupplierPaymentInfo>>['data']>();
+      await Promise.all(
+        uniqueSupplierIds.map(async (id) => {
+          const r = await getSupplierPaymentInfo(orgId, id);
+          paymentInfoMap.set(id, r.success ? r.data : null);
+        }),
+      );
+
+      generateCsv(allInvoicesForCsv, paymentInfoMap);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al descargar nómina');
+    } finally {
+      setDownloadingNominaId(null);
     }
   };
 
@@ -1162,7 +1205,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                         <TableHead className="text-right">Total</TableHead>
                         <TableHead className="text-center">N° Facturas</TableHead>
                         <TableHead className="text-center">Estado</TableHead>
-                        {isAdmin && <TableHead className="w-[60px]">Acciones</TableHead>}
+                        <TableHead className="w-[100px]">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1180,46 +1223,60 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                           <TableCell className="text-center">
                             <NominaStatusBadge status={nom.status} />
                           </TableCell>
-                          {isAdmin && (
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontalIcon className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  {nom.status === NOMINA_STATUS.PENDING && (
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={downloadingNominaId === nom.id}
+                                onClick={() => handleDownloadNominaCsv(nom)}
+                                title="Descargar CSV"
+                              >
+                                {downloadingNominaId === nom.id
+                                  ? <LoaderIcon className="h-4 w-4 animate-spin" />
+                                  : <DownloadIcon className="h-4 w-4" />}
+                              </Button>
+                              {isAdmin && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <MoreHorizontalIcon className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    {nom.status === NOMINA_STATUS.PENDING && (
+                                      <DropdownMenuItem
+                                        onClick={() => setPayDialog({
+                                          open: true,
+                                          nomina: nom,
+                                          file: null,
+                                          uploading: false,
+                                          mismatch: null,
+                                          error: null,
+                                        })}
+                                      >
+                                        Marcar como pagada
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem
-                                      onClick={() => setPayDialog({
-                                        open: true,
-                                        nomina: nom,
-                                        file: null,
-                                        uploading: false,
-                                        mismatch: null,
-                                        error: null,
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => setDeleteDialog({
+                                        open: true, nomina: nom, deleting: false,
                                       })}
                                     >
-                                      Marcar como pagada
+                                      Eliminar
                                     </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => setDeleteDialog({
-                                      open: true, nomina: nom, deleting: false,
-                                    })}
-                                  >
-                                    Eliminar
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                       {nominas.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-muted-foreground">
+                          <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
                             No hay nóminas creadas
                           </TableCell>
                         </TableRow>
@@ -1244,6 +1301,18 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                         </div>
                         <div className="flex items-center gap-2">
                           <NominaStatusBadge status={nom.status} />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            disabled={downloadingNominaId === nom.id}
+                            onClick={() => handleDownloadNominaCsv(nom)}
+                            title="Descargar CSV"
+                          >
+                            {downloadingNominaId === nom.id
+                              ? <LoaderIcon className="h-4 w-4 animate-spin" />
+                              : <DownloadIcon className="h-4 w-4" />}
+                          </Button>
                           {isAdmin && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
