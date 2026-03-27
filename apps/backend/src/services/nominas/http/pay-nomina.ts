@@ -51,8 +51,8 @@ export async function payNominaHandler(
     if (!id || !isValidUUID(id)) return validationError('Invalid nomina ID');
 
     // Admin check
-    const user = await userDb.findById(context.userId!);
-    if (!user || user.role !== 'admin') {
+    const user = context.email ? await userDb.findByEmail(context.email) : null;
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('Forbidden', HttpStatus.FORBIDDEN);
     }
 
@@ -81,7 +81,7 @@ export async function payNominaHandler(
     const buffer = await file.arrayBuffer();
     const fileBytes = new Uint8Array(buffer);
 
-    const nomina = await payNomina(id, orgId, context.userId!, fileBytes, mimeType, file.name);
+    const nomina = await payNomina(id, orgId, user.id, fileBytes, mimeType, file.name);
     return successResponse(nomina, 'Nomina marked as paid');
   } catch (error) {
     if (error instanceof AmountMismatchError) {
