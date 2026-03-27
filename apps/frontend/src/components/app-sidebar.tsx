@@ -39,8 +39,13 @@ const navItems = [
   { label: 'Equipo', href: '/team', icon: Users2Icon },
   { label: 'Presupuesto', href: '/budget', icon: WalletIcon },
   { label: 'Estadísticas', href: '/statistics', icon: BarChart3Icon },
+];
+
+const adminNavItems = [
   { label: 'Configuración', href: '/settings', icon: SettingsIcon },
 ];
+
+const ADMIN_ROLES = ['admin', 'super_admin'];
 
 function getInitials(profile: UserProfile | null): string {
   if (!profile) return '?';
@@ -92,7 +97,7 @@ export function AppSidebar(): React.JSX.Element {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {[...navItems, ...(ADMIN_ROLES.includes(profile?.role ?? '') ? adminNavItems : [])].map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <SidebarMenuItem key={item.href}>
