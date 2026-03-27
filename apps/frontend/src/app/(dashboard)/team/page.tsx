@@ -90,14 +90,19 @@ function formatTaxId(taxId: string): string {
   return `${formatted}-${dv}`;
 }
 
+const ADMIN_ROLES = ['admin', 'super_admin'];
+
 interface PageData {
   users: User[];
   org: Organization | null;
   currentUserId: string | null;
+  isAdmin: boolean;
 }
 
 export default function TeamPage(): React.JSX.Element {
-  const [data, setData] = useState<PageData>({ users: [], org: null, currentUserId: null });
+  const [data, setData] = useState<PageData>({
+    users: [], org: null, currentUserId: null, isAdmin: false,
+  });
   const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
@@ -128,6 +133,7 @@ export default function TeamPage(): React.JSX.Element {
         users: usersRes.success && usersRes.data ? usersRes.data.data : [],
         org: orgRes.success && orgRes.data ? orgRes.data : null,
         currentUserId: meRes.data.id,
+        isAdmin: ADMIN_ROLES.includes(meRes.data.role ?? ''),
       });
       setLoadStatus('loaded');
     } catch {
@@ -184,7 +190,7 @@ export default function TeamPage(): React.JSX.Element {
     loadData();
   }
 
-  const { users, org, currentUserId } = data;
+  const { users, org, currentUserId, isAdmin } = data;
 
   return (
     <div className="flex h-full flex-col">
@@ -193,10 +199,12 @@ export default function TeamPage(): React.JSX.Element {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-2 h-4" />
         <h1 className="flex-1 text-lg font-semibold">Equipo</h1>
-        <Button size="sm" onClick={() => setAddDialogOpen(true)}>
-          <PlusIcon className="mr-1.5 h-4 w-4" />
-          Agregar usuario
-        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+            <PlusIcon className="mr-1.5 h-4 w-4" />
+            Agregar usuario
+          </Button>
+        )}
       </header>
 
       {/* Content */}
@@ -281,14 +289,19 @@ export default function TeamPage(): React.JSX.Element {
                     <TableRow>
                       <TableCell colSpan={5}>
                         <div className="py-8 text-center text-sm text-muted-foreground">
-                          No hay otros miembros en el equipo.{' '}
-                          <button
-                            type="button"
-                            className="text-foreground underline underline-offset-2"
-                            onClick={() => setAddDialogOpen(true)}
-                          >
-                            Agregar uno
-                          </button>
+                          No hay otros miembros en el equipo.
+                          {isAdmin && (
+                            <>
+                              {' '}
+                              <button
+                                type="button"
+                                className="text-foreground underline underline-offset-2"
+                                onClick={() => setAddDialogOpen(true)}
+                              >
+                                Agregar uno
+                              </button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -329,7 +342,7 @@ export default function TeamPage(): React.JSX.Element {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {user.id !== currentUserId && (
+                          {isAdmin && user.id !== currentUserId && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button
