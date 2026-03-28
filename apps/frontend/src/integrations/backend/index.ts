@@ -13,4 +13,5 @@ export * from './organizations';
 export * from './suppliers';
 export * from './budget';
 export * from './settings';
+export * from './contabilidad';
 export type { ApiResponse, PaginatedResponse } from './client';
