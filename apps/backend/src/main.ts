@@ -17,6 +17,8 @@ import { registerInvoiceRoutes } from './services/invoices/routes.js';
 import { registerBudgetRoutes } from './services/budget/routes.js';
 import { registerNominaRoutes } from './services/nominas/routes.js';
 import { registerSettingsRoutes } from './services/settings/routes.js';
+import { registerCostCenterRoutes } from './services/cost-centers/routes.js';
+import { registerAccountingIdRoutes } from './services/accounting-ids/routes.js';
 
 const router = new Router();
 
@@ -44,6 +46,8 @@ registerInvoiceRoutes(router);
 registerBudgetRoutes(router);
 registerNominaRoutes(router);
 registerSettingsRoutes(router);
+registerCostCenterRoutes(router);
+registerAccountingIdRoutes(router);
 
 const port = parseInt(process.env.API_PORT ?? '8000', 10);
 const host = process.env.API_HOST ?? 'localhost';
