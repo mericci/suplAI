@@ -112,7 +112,7 @@ export function CostCenterDetailPage(): React.JSX.Element {
     try {
       const res = await deleteCostCenter(orgId, costCenter.id);
       if (res.success) {
-        router.push('/contabilidad');
+        router.push('/accounting');
       } else {
         setError(res.error ?? 'Error al eliminar.');
       }
@@ -165,7 +165,7 @@ export function CostCenterDetailPage(): React.JSX.Element {
         <Separator orientation="vertical" className="mx-2 h-4" />
         <button
           type="button"
-          onClick={() => router.push('/contabilidad')}
+          onClick={() => router.push('/accounting')}
           className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-sm"
         >
           <ArrowLeftIcon className="h-4 w-4" />

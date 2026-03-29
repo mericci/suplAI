@@ -39,7 +39,7 @@ const navItems = [
   { label: 'Proveedores', href: '/providers', icon: UsersIcon },
   { label: 'Equipo', href: '/team', icon: Users2Icon },
   { label: 'Presupuesto', href: '/budget', icon: WalletIcon },
-  { label: 'Contabilidad', href: '/contabilidad', icon: BookOpenIcon },
+  { label: 'Contabilidad', href: '/accounting', icon: BookOpenIcon },
   { label: 'Estadísticas', href: '/statistics', icon: BarChart3Icon },
 ];
 
@@ -100,8 +100,8 @@ export function AppSidebar(): React.JSX.Element {
           <SidebarGroupContent>
             <SidebarMenu>
               {[...navItems, ...(ADMIN_ROLES.includes(profile?.role ?? '') ? adminNavItems : [])].map((item) => {
-                const isActive = item.href === '/contabilidad'
-                  ? pathname.startsWith('/contabilidad')
+                const isActive = item.href === '/accounting'
+                  ? pathname.startsWith('/accounting')
                   : pathname === item.href;
                 return (
                   <SidebarMenuItem key={item.href}>

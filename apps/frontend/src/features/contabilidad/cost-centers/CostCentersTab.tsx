@@ -113,7 +113,7 @@ export function CostCentersTab({ orgId, isAdmin }: CostCentersTabProps): React.J
   }
 
   function handleRowClick(id: string): void {
-    router.push(`/contabilidad/cost-centers/${id}`);
+    router.push(`/accounting/cost-centers/${id}`);
   }
 
   function renderTable(): React.JSX.Element {
