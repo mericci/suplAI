@@ -35,6 +35,8 @@ import {
 import { CreateSupplierSheet } from './CreateSupplierSheet';
 import { DocumentPreviewSheet } from './DocumentPreviewSheet';
 import { PaymentInfoTab } from './PaymentInfoTab';
+import { SupplierCostCentersTab } from './SupplierCostCentersTab';
+import { SupplierAccountingIdsTab } from './SupplierAccountingIdsTab';
 import { formatRut } from '@/lib/rut';
 
 interface SupplierProfileProps {
@@ -600,6 +602,8 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
             <TabsList>
               <TabsTrigger value="documentos">Documentos</TabsTrigger>
               <TabsTrigger value="informacion_pago">Información de pago</TabsTrigger>
+              <TabsTrigger value="centros_costos">Centro de Costos</TabsTrigger>
+              <TabsTrigger value="ids_contables">IDs Contables</TabsTrigger>
             </TabsList>
 
             <TabsContent value="documentos" className="mt-6">
@@ -658,6 +662,38 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
                   defaultAccountHolderName={supplier.legalName}
                   defaultTaxIdentifier={formatRut(supplier.taxIdentifier)}
                   readOnly={!isAdmin}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-16 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No se pudo determinar la organización actual.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="centros_costos" className="mt-6">
+              {orgId ? (
+                <SupplierCostCentersTab
+                  supplierId={supplierId}
+                  orgId={orgId}
+                  isAdmin={isAdmin}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-16 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No se pudo determinar la organización actual.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="ids_contables" className="mt-6">
+              {orgId ? (
+                <SupplierAccountingIdsTab
+                  supplierId={supplierId}
+                  orgId={orgId}
+                  isAdmin={isAdmin}
                 />
               ) : (
                 <div className="flex flex-col items-center gap-2 py-16 text-center">

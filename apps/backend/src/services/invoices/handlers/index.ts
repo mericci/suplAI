@@ -9,3 +9,5 @@ export { deleteInvoice } from './delete-invoice.js';
 export { syncInvoices } from './sync-invoices.js';
 export { importInvoices } from './import-invoices.js';
 export { validateInvoice } from './validate-invoice.js';
+export { listPendingDistributions } from './list-pending-distributions.js';
+export { createInvoiceDistributions } from './create-invoice-distributions.js';
