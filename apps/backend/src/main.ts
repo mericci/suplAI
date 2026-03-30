@@ -19,6 +19,8 @@ import { registerNominaRoutes } from './services/nominas/routes.js';
 import { registerSettingsRoutes } from './services/settings/routes.js';
 import { registerCostCenterRoutes } from './services/cost-centers/routes.js';
 import { registerAccountingIdRoutes } from './services/accounting-ids/routes.js';
+import { registerSupplierCostCenterRoutes } from './services/supplier-cost-centers/routes.js';
+import { registerSupplierAccountingIdRoutes } from './services/supplier-accounting-ids/routes.js';
 
 const router = new Router();
 
@@ -48,6 +50,8 @@ registerNominaRoutes(router);
 registerSettingsRoutes(router);
 registerCostCenterRoutes(router);
 registerAccountingIdRoutes(router);
+registerSupplierCostCenterRoutes(router);
+registerSupplierAccountingIdRoutes(router);
 
 const port = parseInt(process.env.API_PORT ?? '8000', 10);
 const host = process.env.API_HOST ?? 'localhost';

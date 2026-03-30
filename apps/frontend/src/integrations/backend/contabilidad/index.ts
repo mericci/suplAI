@@ -21,4 +21,11 @@ export type {
   AccountingIdWithAggregates,
   CreateAccountingIdPayload,
   UpdateAccountingIdPayload,
+  DistributionType,
+  SupplierCostCenterLink,
+  UpsertSupplierCostCentersPayload,
+  SupplierAccountingIdLink,
+  UpsertSupplierAccountingIdsPayload,
+  PendingDistributionInvoice,
+  CreateInvoiceDistributionsPayload,
 } from './types';

@@ -17,6 +17,8 @@ import { registerNominaRoutes } from './services/nominas/routes.ts';
 import { registerSettingsRoutes } from './services/settings/routes.ts';
 import { registerCostCenterRoutes } from './services/cost-centers/routes.ts';
 import { registerAccountingIdRoutes } from './services/accounting-ids/routes.ts';
+import { registerSupplierCostCenterRoutes } from './services/supplier-cost-centers/routes.ts';
+import { registerSupplierAccountingIdRoutes } from './services/supplier-accounting-ids/routes.ts';
 
 export function createRouter(): Router {
   const router = new Router();
@@ -46,6 +48,8 @@ export function createRouter(): Router {
   registerSettingsRoutes(router);
   registerCostCenterRoutes(router);
   registerAccountingIdRoutes(router);
+  registerSupplierCostCenterRoutes(router);
+  registerSupplierAccountingIdRoutes(router);
 
   return router;
 }
