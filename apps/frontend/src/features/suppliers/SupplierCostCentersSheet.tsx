@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { XIcon, CheckIcon } from 'lucide-react';
+import { XIcon, CheckIcon, SearchIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { listCostCenters } from '@/integrations/backend/contabilidad';
@@ -37,6 +37,7 @@ export function SupplierCostCentersSheet({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [distributionType, setDistributionType] = useState<DistributionType>('single');
   const [percentages, setPercentages] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingCostCenters, setLoadingCostCenters] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function SupplierCostCentersSheet({
         .map((e) => [e.costCenterId, String(e.percentage)]),
     );
     setPercentages(existingPercentages);
+    setSearch('');
     setError(null);
   }, [open, existing, orgId]);
 
@@ -123,6 +125,12 @@ export function SupplierCostCentersSheet({
 
   const selectedArray = [...selected];
   const showDistributionOptions = selected.size > 1;
+  const filteredCostCenters = search.trim() === ''
+    ? costCenters
+    : costCenters.filter((cc) => {
+      const q = search.toLowerCase();
+      return cc.name.toLowerCase().includes(q) || cc.externalId.toLowerCase().includes(q);
+    });
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -183,35 +191,54 @@ export function SupplierCostCentersSheet({
               </div>
             )}
             {!loadingCostCenters && costCenters.length > 0 && (
-              <div className="max-h-52 overflow-y-auto rounded-md border divide-y">
-                {costCenters.map((cc) => {
-                  const isSelected = selected.has(cc.id);
-                  const checkClass = [
-                    'flex h-4 w-4 items-center justify-center rounded border',
-                    isSelected ? 'bg-primary border-primary' : 'border-input',
-                  ].join(' ');
-                  return (
-                    <label
-                      key={cc.id}
-                      className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50"
-                    >
-                      <div className={checkClass}>
-                        {isSelected && <CheckIcon className="h-3 w-3 text-primary-foreground" />}
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={isSelected}
-                        onChange={() => toggleCostCenter(cc.id)}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{cc.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{cc.externalId}</p>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
+              <>
+                <div className="relative mb-2">
+                  <SearchIcon className={[
+                    'absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2',
+                    'text-muted-foreground pointer-events-none',
+                  ].join(' ')} />
+                  <Input
+                    placeholder="Buscar..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-8 h-9"
+                  />
+                </div>
+                <div className="max-h-52 overflow-y-auto rounded-md border divide-y">
+                  {filteredCostCenters.length === 0 && (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      Sin resultados
+                    </p>
+                  )}
+                  {filteredCostCenters.map((cc) => {
+                    const isSelected = selected.has(cc.id);
+                    const checkClass = [
+                      'flex h-4 w-4 items-center justify-center rounded border',
+                      isSelected ? 'bg-primary border-primary' : 'border-input',
+                    ].join(' ');
+                    return (
+                      <label
+                        key={cc.id}
+                        className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50"
+                      >
+                        <div className={checkClass}>
+                          {isSelected && <CheckIcon className="h-3 w-3 text-primary-foreground" />}
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={isSelected}
+                          onChange={() => toggleCostCenter(cc.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{cc.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{cc.externalId}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
 
