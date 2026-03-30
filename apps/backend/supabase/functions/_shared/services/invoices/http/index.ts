@@ -9,3 +9,5 @@ export { deleteInvoiceHandler } from './delete-invoice.ts';
 export { syncInvoicesHandler } from './sync-invoices.ts';
 export { importInvoicesHandler } from './import-invoices.ts';
 export { validateInvoiceHandler } from './validate-invoice.ts';
+export { listPendingDistributionsHandler } from './list-pending-distributions.ts';
+export { createInvoiceDistributionsHandler } from './create-invoice-distributions.ts';

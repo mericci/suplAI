@@ -16,6 +16,8 @@ import {
   syncInvoicesHandler,
   importInvoicesHandler,
   validateInvoiceHandler,
+  listPendingDistributionsHandler,
+  createInvoiceDistributionsHandler,
 } from './http/index.js';
 import { requireAuth } from '../../auth/middleware.js';
 
@@ -84,5 +86,17 @@ export function registerInvoiceRoutes(router: Router): void {
   router.delete(
     '/api/organizations/:orgId/invoices/:id',
     requireAuth(async (req) => deleteInvoiceHandler(req)),
+  );
+
+  // List invoices pending manual distribution assignment
+  router.get(
+    '/api/organizations/:orgId/invoices/pending-distributions',
+    requireAuth(async (req) => listPendingDistributionsHandler(req)),
+  );
+
+  // Submit manual distribution records for an invoice
+  router.post(
+    '/api/organizations/:orgId/invoices/:id/distributions',
+    requireAuth(async (req) => createInvoiceDistributionsHandler(req)),
   );
 }
