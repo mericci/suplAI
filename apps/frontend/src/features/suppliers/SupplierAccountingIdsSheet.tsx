@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { XIcon, CheckIcon } from 'lucide-react';
+import { XIcon, CheckIcon, SearchIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { listAccountingIds } from '@/integrations/backend/contabilidad';
@@ -37,6 +37,7 @@ export function SupplierAccountingIdsSheet({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [distributionType, setDistributionType] = useState<DistributionType>('single');
   const [percentages, setPercentages] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingIds, setLoadingIds] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export function SupplierAccountingIdsSheet({
         .map((e) => [e.accountingId, String(e.percentage)]),
     );
     setPercentages(existingPercentages);
+    setSearch('');
     setError(null);
   }, [open, existing, orgId]);
 
@@ -117,6 +119,13 @@ export function SupplierAccountingIdsSheet({
 
   const selectedArray = [...selected];
   const showDistributionOptions = selected.size > 1;
+  const filteredAccountingIds = search.trim() === ''
+    ? accountingIds
+    : accountingIds.filter((ai) => {
+      const q = search.toLowerCase();
+      return ai.externalId.toLowerCase().includes(q)
+        || ai.description.toLowerCase().includes(q);
+    });
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -153,8 +162,26 @@ export function SupplierAccountingIdsSheet({
               </div>
             )}
             {!loadingIds && accountingIds.length > 0 && (
-              <div className="max-h-52 overflow-y-auto rounded-md border divide-y">
-                {accountingIds.map((ai) => (
+              <>
+                <div className="relative mb-2">
+                  <SearchIcon className={[
+                    'absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2',
+                    'text-muted-foreground pointer-events-none',
+                  ].join(' ')} />
+                  <Input
+                    placeholder="Buscar..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-8 h-9"
+                  />
+                </div>
+                <div className="max-h-52 overflow-y-auto rounded-md border divide-y">
+                  {filteredAccountingIds.length === 0 && (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      Sin resultados
+                    </p>
+                  )}
+                  {filteredAccountingIds.map((ai) => (
                   <label
                     key={ai.id}
                     className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50"
@@ -176,8 +203,9 @@ export function SupplierAccountingIdsSheet({
                       <p className="truncate text-xs text-muted-foreground">{ai.description}</p>
                     </div>
                   </label>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
