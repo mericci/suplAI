@@ -8,6 +8,7 @@ import { getMe } from '@/integrations/backend/users';
 import { cn } from '@/lib/utils';
 import { CostCentersTab } from './cost-centers/CostCentersTab';
 import { AccountingIdsTab } from './accounting-ids/AccountingIdsTab';
+import { PendingDistributionsTab } from './pending-distributions/PendingDistributionsTab';
 import { CONTABILIDAD_TAB, ADMIN_ROLES } from './constants';
 
 export function ContabilidadPage(): React.JSX.Element {
@@ -82,11 +83,7 @@ export function ContabilidadPage(): React.JSX.Element {
             </Tabs.Content>
 
             <Tabs.Content value={CONTABILIDAD_TAB.PENDIENTES}>
-              <div className="rounded-lg border border-dashed py-20 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Pendientes de distribución — próximamente.
-                </p>
-              </div>
+              {orgId && <PendingDistributionsTab orgId={orgId} />}
             </Tabs.Content>
           </Tabs.Root>
         </div>

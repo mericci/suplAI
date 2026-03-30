@@ -9,3 +9,5 @@ export { deleteInvoiceHandler } from './delete-invoice.js';
 export { syncInvoicesHandler } from './sync-invoices.js';
 export { importInvoicesHandler } from './import-invoices.js';
 export { validateInvoiceHandler } from './validate-invoice.js';
+export { listPendingDistributionsHandler } from './list-pending-distributions.js';
+export { createInvoiceDistributionsHandler } from './create-invoice-distributions.js';
