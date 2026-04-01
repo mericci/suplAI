@@ -12,6 +12,9 @@ export interface SupplierPublic {
   id: string;
   legalName: string;
   taxIdentifier: string;
+  pendingAmount: number;
+  approvedAmount: number;
+  paidAmount: number;
   totalInvoiceAmount: number;
   totalApprovedAmount: number;
   respaldoType: 'none' | 'manual_insight' | 'validated_document';
@@ -26,6 +29,9 @@ export interface SupplierSearchParams {
 }
 
 type SupplierInput = SupplierRow & {
+  pendingAmount?: number;
+  approvedAmount?: number;
+  paidAmount?: number;
   totalInvoiceAmount?: number;
   totalApprovedAmount?: number;
   respaldoType?: 'none' | 'manual_insight' | 'validated_document';
@@ -36,6 +42,9 @@ export function toPublic(supplier: SupplierInput): SupplierPublic {
     id: supplier.id,
     legalName: supplier.legal_name,
     taxIdentifier: supplier.tax_identifier,
+    pendingAmount: supplier.pendingAmount ?? 0,
+    approvedAmount: supplier.approvedAmount ?? 0,
+    paidAmount: supplier.paidAmount ?? 0,
     totalInvoiceAmount: supplier.totalInvoiceAmount ?? 0,
     totalApprovedAmount: supplier.totalApprovedAmount ?? 0,
     respaldoType: supplier.respaldoType ?? 'none',

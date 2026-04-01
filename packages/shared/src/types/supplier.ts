@@ -2,6 +2,9 @@ export interface Supplier {
   id: string;
   legalName: string;
   taxIdentifier: string;
+  pendingAmount: number;
+  approvedAmount: number;
+  paidAmount: number;
   totalInvoiceAmount: number;
   totalApprovedAmount: number;
   respaldoType: 'none' | 'manual_insight' | 'validated_document';

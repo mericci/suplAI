@@ -30,8 +30,10 @@ export const SupplierListFiltersSchema = z.object({
   search: z.string().optional(),
   taxIdentifier: z.string().optional(),
   page: z.number().int().positive().default(1),
-  limit: z.number().int().positive().max(100)
+  limit: z.number().int().positive().max(500)
     .default(10),
+  sortBy: z.string().optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
 });
 
 export type CreateSupplierInput = z.infer<typeof CreateSupplierSchema>;
