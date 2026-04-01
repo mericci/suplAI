@@ -8,6 +8,7 @@ import {
   listNominasHandler,
   getLockedInvoiceIdsHandler,
   createNominaHandler,
+  updateNominaHandler,
   deleteNominaHandler,
   payNominaHandler,
 } from './http/index.js';
@@ -42,5 +43,11 @@ export function registerNominaRoutes(router: Router): void {
   router.patch(
     '/api/organizations/:orgId/nominas/:id/pay',
     requireAuth(async (req, context) => payNominaHandler(req, context)),
+  );
+
+  // Update nomina invoice list (admin only, pending nominas only)
+  router.patch(
+    '/api/organizations/:orgId/nominas/:id',
+    requireAuth(async (req, context) => updateNominaHandler(req, context)),
   );
 }

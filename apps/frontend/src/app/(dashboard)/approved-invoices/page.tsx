@@ -11,7 +11,6 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   ChevronsUpDownIcon,
-  MoreHorizontalIcon,
   XIcon,
   CheckCircle2Icon,
   XCircleIcon,
@@ -34,12 +33,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -90,6 +83,7 @@ import {
   getLockedInvoiceIds,
 } from '@/integrations/backend/nominas';
 import type { PayNominaAmountMismatch } from '@/integrations/backend/nominas';
+import { NominaProfileSheet } from '@/features/nominas/components/nomina-profile-sheet';
 import { cn } from '@/lib/utils';
 import { NOMINA_STATUS, NOMINA_STATUS_LABELS, NOMINA_TAB } from '@/features/nominas/constants';
 
@@ -270,6 +264,8 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
     deleting: false,
   });
   const [downloadingNominaId, setDownloadingNominaId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedNomina, setSelectedNomina] = useState<NominaWithInvoiceIds | null>(null);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSortChangeRef = useRef(false);
 
@@ -486,8 +482,6 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
 
-  const totalApproved = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
-
   // Unlocked invoices on current page
   const unlockedOnPage = filtered.filter((inv) => !lockedInvoiceIds.has(inv.id));
   const allUnlockedSelected = unlockedOnPage.length > 0
@@ -696,6 +690,38 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
       setDeleteDialog((s) => ({ ...s, deleting: false }));
     }
   };
+
+  const handleOpenNominaSheet = (nom: NominaWithInvoiceIds): void => {
+    setSelectedNomina(nom);
+    setSheetOpen(true);
+  };
+
+  const handleNominaUpdated = useCallback(async (updated: NominaWithInvoiceIds): Promise<void> => {
+    setNominas((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+    setSelectedNomina(updated);
+    const orgId = await getOrgId();
+    if (orgId) await refreshLockedIds(orgId);
+  }, [getOrgId, refreshLockedIds]);
+
+  const handleNominaPaidFromSheet = useCallback(
+    async (paid: NominaWithInvoiceIds): Promise<void> => {
+      setNominas((prev) => prev.filter((n) => n.id !== paid.id));
+      setSheetOpen(false);
+      const orgId = await getOrgId();
+      if (orgId) await Promise.all([refreshLockedIds(orgId), refreshNominas(orgId)]);
+    },
+    [getOrgId, refreshLockedIds, refreshNominas],
+  );
+
+  const handleNominaDeletedFromSheet = useCallback(
+    async (nominaId: string): Promise<void> => {
+      setNominas((prev) => prev.filter((n) => n.id !== nominaId));
+      setSheetOpen(false);
+      const orgId = await getOrgId();
+      if (orgId) await refreshLockedIds(orgId);
+    },
+    [getOrgId, refreshLockedIds],
+  );
 
   function SortIcon({ column }: { column: string }): React.JSX.Element {
     if (sortConfig.column !== column) {
@@ -1210,7 +1236,11 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                     </TableHeader>
                     <TableBody>
                       {nominas.map((nom) => (
-                        <TableRow key={nom.id}>
+                        <TableRow
+                          key={nom.id}
+                          className="cursor-pointer hover:bg-accent/50"
+                          onClick={() => handleOpenNominaSheet(nom)}
+                        >
                           <TableCell>
                             <span className="text-sm">{formatDate(nom.createdAt)}</span>
                           </TableCell>
@@ -1224,7 +1254,11 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                             <NominaStatusBadge status={nom.status} />
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1">
+                            <div
+                              className="flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                              role="presentation"
+                            >
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -1237,39 +1271,6 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                                   ? <LoaderIcon className="h-4 w-4 animate-spin" />
                                   : <DownloadIcon className="h-4 w-4" />}
                               </Button>
-                              {isAdmin && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                      <MoreHorizontalIcon className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    {nom.status === NOMINA_STATUS.PENDING && (
-                                      <DropdownMenuItem
-                                        onClick={() => setPayDialog({
-                                          open: true,
-                                          nomina: nom,
-                                          file: null,
-                                          uploading: false,
-                                          mismatch: null,
-                                          error: null,
-                                        })}
-                                      >
-                                        Marcar como pagada
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onClick={() => setDeleteDialog({
-                                        open: true, nomina: nom, deleting: false,
-                                      })}
-                                    >
-                                      Eliminar
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1290,7 +1291,12 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
               {!nominasLoading && (
                 <div className="flex flex-col gap-3 md:hidden">
                   {nominas.map((nom) => (
-                    <div key={nom.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                    <button
+                      key={nom.id}
+                      type="button"
+                      className="rounded-lg border bg-card p-4 shadow-sm text-left w-full hover:bg-accent/30 transition-colors"
+                      onClick={() => handleOpenNominaSheet(nom)}
+                    >
                       <div className="flex items-start justify-between">
                         <div className="flex flex-col gap-1">
                           <span className="text-sm font-medium">{formatDate(nom.createdAt)}</span>
@@ -1299,59 +1305,12 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                             {' facturas'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <NominaStatusBadge status={nom.status} />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 shrink-0"
-                            disabled={downloadingNominaId === nom.id}
-                            onClick={() => handleDownloadNominaCsv(nom)}
-                            title="Descargar CSV"
-                          >
-                            {downloadingNominaId === nom.id
-                              ? <LoaderIcon className="h-4 w-4 animate-spin" />
-                              : <DownloadIcon className="h-4 w-4" />}
-                          </Button>
-                          {isAdmin && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                                  <MoreHorizontalIcon className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {nom.status === NOMINA_STATUS.PENDING && (
-                                  <DropdownMenuItem
-                                    onClick={() => setPayDialog({
-                                      open: true,
-                                      nomina: nom,
-                                      file: null,
-                                      uploading: false,
-                                      mismatch: null,
-                                      error: null,
-                                    })}
-                                  >
-                                    Marcar como pagada
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => setDeleteDialog({
-                                    open: true, nomina: nom, deleting: false,
-                                  })}
-                                >
-                                  Eliminar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
+                        <NominaStatusBadge status={nom.status} />
                       </div>
                       <div className="mt-3">
                         <span className="text-lg font-semibold">{formatCLP(nom.totalAmount)}</span>
                       </div>
-                    </div>
+                    </button>
                   ))}
                   {nominas.length === 0 && (
                     <p className="py-10 text-center text-muted-foreground">No hay nóminas creadas</p>
@@ -1506,6 +1465,19 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      {/* Nomina profile sheet */}
+      <NominaProfileSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        nomina={selectedNomina}
+        orgId={cachedOrgId ?? ''}
+        isAdmin={isAdmin}
+        lockedInvoiceIds={lockedInvoiceIds}
+        onNominaUpdated={handleNominaUpdated}
+        onNominaPaid={handleNominaPaidFromSheet}
+        onNominaDeleted={handleNominaDeletedFromSheet}
+      />
     </TooltipProvider>
   );
 }
