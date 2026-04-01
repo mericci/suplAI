@@ -26,6 +26,8 @@ export async function listSuppliersByOrgHandler(
       limit: url.searchParams.has('limit')
         ? Number(url.searchParams.get('limit'))
         : undefined,
+      sortBy: url.searchParams.get('sortBy') ?? undefined,
+      sortDir: (url.searchParams.get('sortDir') ?? undefined) as 'asc' | 'desc' | undefined,
     };
 
     const result = await listSuppliersByOrg(orgId, filters);

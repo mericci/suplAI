@@ -15,6 +15,9 @@ type CreateSupplierInput = Database['public']['Tables']['suppliers']['Insert'];
 type UpdateSupplierInput = Database['public']['Tables']['suppliers']['Update'];
 
 export type SupplierWithAmounts = Supplier & {
+  pendingAmount: number;
+  approvedAmount: number;
+  paidAmount: number;
   totalInvoiceAmount: number;
   totalApprovedAmount: number;
   respaldoType: 'none' | 'manual_insight' | 'validated_document';
@@ -123,6 +126,8 @@ export async function findByOrganization(
   limit: number,
   offset: number,
   search?: string,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
 ): Promise<{ suppliers: SupplierWithAmounts[]; total: number }> {
   // Step 1: Fetch supplier IDs linked to this org from the junction table
   const { data: junctionRows, error: junctionError } = await (supabase as any)
@@ -164,15 +169,18 @@ export async function findByOrganization(
   const { count, error: countError } = await countQuery;
   if (countError) throw new Error(`Database error: ${countError.message}`);
 
-  const { data, error } = await dataQuery
-    .range(offset, offset + limit - 1)
-    .order('created_at', { ascending: false });
+  const validSortColumns = ['legal_name', 'tax_identifier', 'created_at'];
+  const orderedQuery = sortBy && validSortColumns.includes(sortBy)
+    ? dataQuery.range(offset, offset + limit - 1).order(sortBy, { ascending: sortDir === 'asc' })
+    : dataQuery.range(offset, offset + limit - 1).order('created_at', { ascending: false });
+
+  const { data, error } = await orderedQuery;
 
   if (error) throw new Error(`Database error: ${error.message}`);
 
   // Step 3: Aggregate invoice amounts per supplier for this page
   const pageSupplierIds = (data ?? []).map((s) => s.id);
-  let totals: Record<string, { total: number; approved: number }> = {};
+  let totals: Record<string, { pending: number; approved: number; paid: number; total: number }> = {};
 
   if (pageSupplierIds.length > 0) {
     const { data: amountRows, error: amountError } = await (supabase as any)
@@ -189,13 +197,14 @@ export async function findByOrganization(
       supplier_id: string;
       gross_amount: number | null;
       status: string;
-    }[]).reduce<Record<string, { total: number; approved: number }>>(
+    }[]).reduce<Record<string, { pending: number; approved: number; paid: number; total: number }>>(
       (acc, row) => {
-        if (!acc[row.supplier_id]) acc[row.supplier_id] = { total: 0, approved: 0 };
-        acc[row.supplier_id].total += row.gross_amount ?? 0;
-        if (row.status === 'approved' || row.status === 'paid') {
-          acc[row.supplier_id].approved += row.gross_amount ?? 0;
-        }
+        if (!acc[row.supplier_id]) acc[row.supplier_id] = { pending: 0, approved: 0, paid: 0, total: 0 };
+        const amount = row.gross_amount ?? 0;
+        acc[row.supplier_id].total += amount;
+        if (row.status === 'pending') acc[row.supplier_id].pending += amount;
+        if (row.status === 'approved') acc[row.supplier_id].approved += amount;
+        if (row.status === 'paid') acc[row.supplier_id].paid += amount;
         return acc;
       },
       {},
@@ -225,8 +234,11 @@ export async function findByOrganization(
 
   const suppliers: SupplierWithAmounts[] = (data ?? []).map((s) => ({
     ...s,
+    pendingAmount: totals[s.id]?.pending ?? 0,
+    approvedAmount: totals[s.id]?.approved ?? 0,
+    paidAmount: totals[s.id]?.paid ?? 0,
     totalInvoiceAmount: totals[s.id]?.total ?? 0,
-    totalApprovedAmount: totals[s.id]?.approved ?? 0,
+    totalApprovedAmount: (totals[s.id]?.approved ?? 0) + (totals[s.id]?.paid ?? 0),
     respaldoType: deriveRespaldoType(respaldoMap[s.id] ?? []),
   }));
 
