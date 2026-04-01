@@ -154,3 +154,28 @@ export async function findInvoiceIdsByNominaId(nominaId: string): Promise<string
   if (error) throw new Error(`Database error: ${error.message}`);
   return ((data ?? []) as Array<{ invoice_id: string }>).map((row) => row.invoice_id);
 }
+
+/**
+ * Replace all invoice associations for a nomina and update its totals.
+ * Sequential operations: delete existing → insert new → update nomina row.
+ */
+export async function replaceNominaInvoices(
+  nominaId: string,
+  orgId: string,
+  newInvoiceIds: string[],
+  newTotalAmount: number,
+): Promise<NominaRow> {
+  const { error: deleteError } = await supabase
+    .from('nomina_invoices')
+    .delete()
+    .eq('nomina_id', nominaId);
+
+  if (deleteError) throw new Error(`Database error: ${deleteError.message}`);
+
+  await insertNominaInvoices(nominaId, newInvoiceIds);
+
+  return update(nominaId, orgId, {
+    total_amount: newTotalAmount,
+    invoice_count: newInvoiceIds.length,
+  });
+}

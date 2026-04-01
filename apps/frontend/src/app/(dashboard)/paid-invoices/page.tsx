@@ -12,7 +12,6 @@ import {
   ChevronUpIcon,
   ChevronsUpDownIcon,
   XIcon,
-  FileTextIcon,
   ReceiptIcon,
   LoaderIcon,
 } from 'lucide-react';
@@ -52,6 +51,7 @@ import { getMe } from '@/integrations/backend/users';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
 import { listNominas } from '@/integrations/backend/nominas';
+import { NominaProfileSheet } from '@/features/nominas/components/nomina-profile-sheet';
 import { createClient } from '@/lib/supabase/client';
 import { NOMINA_STATUS, NOMINA_STATUS_LABELS } from '@/features/nominas/constants';
 
@@ -158,6 +158,8 @@ export default function PaidInvoicesPage(): React.JSX.Element {
     invoices: [],
     loading: false,
   });
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedNomina, setSelectedNomina] = useState<NominaWithInvoiceIds | null>(null);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSortChangeRef = useRef(false);
 
@@ -318,42 +320,6 @@ export default function PaidInvoicesPage(): React.JSX.Element {
     } finally {
       setVoucherLoading(null);
     }
-  };
-
-  const handleViewInvoices = async (nomina: NominaWithInvoiceIds): Promise<void> => {
-    setInvoiceDialog({
-      open: true, nomina, invoices: [], loading: true,
-    });
-
-    const orgId = await getOrgId();
-    if (!orgId) {
-      setInvoiceDialog((s) => ({ ...s, loading: false }));
-      return;
-    }
-
-    // Fetch paid invoices that belong to this nomina
-    const fetched: Invoice[] = [];
-    let page = 1;
-    let hasMore = true;
-    while (hasMore && fetched.length < nomina.invoiceIds.length) {
-      // eslint-disable-next-line no-await-in-loop
-      const res = await getOrgInvoices(orgId, { page, limit: 500, status: 'paid' });
-      if (!res.success || !res.data) break;
-      fetched.push(...res.data.data.filter((inv) => nomina.invoiceIds.includes(inv.id)));
-      hasMore = page < res.data.pagination.totalPages;
-      page += 1;
-    }
-
-    // Resolve supplier names
-    const uncachedIds = [...new Set(fetched.map((inv) => inv.supplierId))].filter(
-      (id) => !supplierNameCache.has(id),
-    );
-    const supplierResults = await Promise.all(uncachedIds.map((id) => getSupplier(id)));
-    supplierResults.forEach((r, i) => {
-      if (r.success && r.data) supplierNameCache.set(uncachedIds[i], r.data.legalName);
-    });
-
-    setInvoiceDialog((s) => ({ ...s, loading: false, invoices: fetched }));
   };
 
   const activeFilterCount = [
@@ -697,7 +663,11 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                     </TableHeader>
                     <TableBody>
                       {nominas.map((nom) => (
-                        <TableRow key={nom.id}>
+                        <TableRow
+                          key={nom.id}
+                          className="cursor-pointer hover:bg-accent/50"
+                          onClick={() => { setSelectedNomina(nom); setSheetOpen(true); }}
+                        >
                           <TableCell className="text-sm">{formatDate(nom.paidAt)}</TableCell>
                           <TableCell className="text-right font-medium">
                             {formatCLP(nom.totalAmount)}
@@ -709,16 +679,11 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1.5"
-                                onClick={() => handleViewInvoices(nom)}
-                              >
-                                <FileTextIcon className="h-3.5 w-3.5" />
-                                Ver facturas
-                              </Button>
+                            <div
+                              className="flex items-center justify-end gap-2"
+                              onClick={(e) => e.stopPropagation()}
+                              role="presentation"
+                            >
                               {nom.voucherStoragePath && nom.voucherStorageBucket && (
                                 <Button
                                   variant="outline"
@@ -751,7 +716,12 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                 {/* Mobile cards */}
                 <div className="flex flex-col gap-3 md:hidden">
                   {nominas.map((nom) => (
-                    <div key={nom.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                    <button
+                      key={nom.id}
+                      type="button"
+                      className="rounded-lg border bg-card p-4 shadow-sm text-left w-full hover:bg-accent/30 transition-colors"
+                      onClick={() => { setSelectedNomina(nom); setSheetOpen(true); }}
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex flex-col gap-1">
                           <span className="font-medium">{formatCLP(nom.totalAmount)}</span>
@@ -763,32 +733,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                           {NOMINA_STATUS_LABELS[nom.status] ?? nom.status}
                         </Badge>
                       </div>
-                      <div className="mt-3 flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 gap-1.5"
-                          onClick={() => handleViewInvoices(nom)}
-                        >
-                          <FileTextIcon className="h-3.5 w-3.5" />
-                          Ver facturas
-                        </Button>
-                        {nom.voucherStoragePath && nom.voucherStorageBucket && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 gap-1.5"
-                            disabled={voucherLoading === nom.id}
-                            onClick={() => handleViewVoucher(nom)}
-                          >
-                            {voucherLoading === nom.id
-                              ? <LoaderIcon className="h-3.5 w-3.5 animate-spin" />
-                              : <ReceiptIcon className="h-3.5 w-3.5" />}
-                            Comprobante
-                          </Button>
-                        )}
-                      </div>
-                    </div>
+                    </button>
                   ))}
                   {nominas.length === 0 && (
                     <p className="py-10 text-center text-muted-foreground">
@@ -868,6 +813,20 @@ export default function PaidInvoicesPage(): React.JSX.Element {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Nomina profile sheet (read-only for paid nominas) */}
+      <NominaProfileSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        nomina={selectedNomina}
+        orgId={cachedOrgId ?? ''}
+        isAdmin={false}
+        lockedInvoiceIds={new Set()}
+        onNominaUpdated={() => {}}
+        onNominaPaid={() => {}}
+        onNominaDeleted={() => {}}
+        onViewVoucher={handleViewVoucher}
+      />
     </div>
   );
 }
