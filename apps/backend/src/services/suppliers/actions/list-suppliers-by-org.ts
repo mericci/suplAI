@@ -23,6 +23,8 @@ export async function listSuppliersByOrg(
       validated.limit,
       offset,
       validated.search,
+      validated.sortBy,
+      validated.sortDir,
     );
 
     return {

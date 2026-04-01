@@ -6,6 +6,9 @@ import {
   SearchIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ChevronsUpDownIcon,
   InfoIcon,
 } from 'lucide-react';
 import {
@@ -55,6 +58,32 @@ function RespaldoBadge({ type }: { type: 'none' | 'manual_insight' | 'validated_
   );
 }
 
+type SortDirection = 'desc' | 'asc' | null;
+interface SortConfig { column: string | null; direction: SortDirection; }
+const DEFAULT_SORT: SortConfig = { column: null, direction: null };
+
+// Columns that are sorted via DB ORDER BY (real columns)
+const DB_SORT_COLUMNS: Record<string, string> = {
+  nombre: 'legal_name',
+  rut: 'tax_identifier',
+};
+
+// Columns sorted client-side (computed amounts)
+const AMOUNT_SORT_COLUMNS = new Set(['pendiente', 'aprobado', 'pagado', 'total']);
+
+const AMOUNT_SORT_KEY: Record<string, keyof Supplier> = {
+  pendiente: 'pendingAmount',
+  aprobado: 'approvedAmount',
+  pagado: 'paidAmount',
+  total: 'totalInvoiceAmount',
+};
+
+function SortIcon({ column, sortConfig }: { column: string; sortConfig: SortConfig }): React.JSX.Element {
+  if (sortConfig.column !== column) return <ChevronsUpDownIcon className="h-3 w-3 text-muted-foreground" />;
+  if (sortConfig.direction === 'desc') return <ChevronDownIcon className="h-3 w-3" />;
+  return <ChevronUpIcon className="h-3 w-3" />;
+}
+
 const PAGE_SIZE = 10;
 
 // Session-scoped cache — survives re-renders and pagination, resets on full reload
@@ -75,10 +104,12 @@ export function SuppliersList(): React.JSX.Element {
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSortChangeRef = useRef(false);
 
   // Debounce search input — reset to page 1 on new query
   const handleSearchChange = (value: string): void => {
@@ -88,6 +119,16 @@ export function SuppliersList(): React.JSX.Element {
       setCurrentPage(1);
       setDebouncedSearch(value);
     }, 350);
+  };
+
+  const handleSort = (column: string): void => {
+    isSortChangeRef.current = true;
+    setCurrentPage(1);
+    setSortConfig((prev) => {
+      if (prev.column !== column) return { column, direction: 'desc' };
+      if (prev.direction === 'desc') return { column, direction: 'asc' };
+      return DEFAULT_SORT;
+    });
   };
 
   useEffect(() => {
@@ -106,8 +147,11 @@ export function SuppliersList(): React.JSX.Element {
           cachedOrgId = meResponse.data.organization_id;
         }
 
-        // Step 2 — supplier page (cache hit = skip API call entirely)
-        const cacheKey = `${cachedOrgId}:${currentPage}:${debouncedSearch}`;
+        const isAmountSort = sortConfig.column !== null && AMOUNT_SORT_COLUMNS.has(sortConfig.column);
+        const isDbSort = sortConfig.column !== null && !isAmountSort;
+
+        const cacheKey = `${cachedOrgId}:${currentPage}:${debouncedSearch}:${sortConfig.column ?? ''}:${sortConfig.direction ?? ''}`;
+
         if (supplierPageCache.has(cacheKey)) {
           const cached = supplierPageCache.get(cacheKey)!;
           setSuppliers(cached.suppliers);
@@ -115,22 +159,58 @@ export function SuppliersList(): React.JSX.Element {
           return;
         }
 
-        // Step 3 — fetch from API (cache miss)
-        const response = await listSuppliersByOrg(cachedOrgId, {
-          page: currentPage,
-          limit: PAGE_SIZE,
-          search: debouncedSearch || undefined,
-        });
+        if (isAmountSort) {
+          // Fetch all suppliers (up to 500) and sort client-side
+          const response = await listSuppliersByOrg(cachedOrgId, {
+            page: 1,
+            limit: 500,
+            search: debouncedSearch || undefined,
+          });
 
-        if (!response.success) {
-          setError('Error al cargar proveedores');
-          return;
+          if (!response.success) {
+            setError('Error al cargar proveedores');
+            return;
+          }
+
+          const sortKey = AMOUNT_SORT_KEY[sortConfig.column!];
+          const sorted = [...response.data].sort((a, b) => {
+            const aVal = a[sortKey] as number;
+            const bVal = b[sortKey] as number;
+            return sortConfig.direction === 'desc' ? bVal - aVal : aVal - bVal;
+          });
+
+          const fakePagination: Pagination = {
+            page: 1,
+            limit: sorted.length,
+            total: sorted.length,
+            totalPages: 1,
+          };
+
+          supplierPageCache.set(cacheKey, { suppliers: sorted, pagination: fakePagination });
+          setSuppliers(sorted);
+          setPagination(fakePagination);
+        } else {
+          // Normal paginated fetch — optionally with backend sort for DB columns
+          const response = await listSuppliersByOrg(cachedOrgId, {
+            page: currentPage,
+            limit: PAGE_SIZE,
+            search: debouncedSearch || undefined,
+            ...(isDbSort ? {
+              sortBy: DB_SORT_COLUMNS[sortConfig.column!],
+              sortDir: sortConfig.direction!,
+            } : {}),
+          });
+
+          if (!response.success) {
+            setError('Error al cargar proveedores');
+            return;
+          }
+
+          const { data: items, pagination: pag } = response;
+          supplierPageCache.set(cacheKey, { suppliers: items, pagination: pag });
+          setSuppliers(items);
+          setPagination(pag);
         }
-
-        const { data: items, pagination: pag } = response;
-        supplierPageCache.set(cacheKey, { suppliers: items, pagination: pag });
-        setSuppliers(items);
-        setPagination(pag);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Error al cargar proveedores',
@@ -141,15 +221,18 @@ export function SuppliersList(): React.JSX.Element {
     };
 
     fetchSuppliers();
-  }, [currentPage, debouncedSearch, refreshKey]);
+  }, [currentPage, debouncedSearch, sortConfig, refreshKey]);
 
   function handleSupplierCreated(): void {
     supplierPageCache.clear();
     setSearch('');
     setDebouncedSearch('');
     setCurrentPage(1);
+    setSortConfig(DEFAULT_SORT);
     setRefreshKey((k) => k + 1);
   }
+
+  const isAmountSort = sortConfig.column !== null && AMOUNT_SORT_COLUMNS.has(sortConfig.column);
 
   return (
     <div className="flex h-full flex-col">
@@ -195,30 +278,72 @@ export function SuppliersList(): React.JSX.Element {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">Nombre</TableHead>
-                    <TableHead>RUT</TableHead>
+                    <TableHead className="min-w-[200px]">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('nombre')}
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                      >
+                        Nombre
+                        <SortIcon column="nombre" sortConfig={sortConfig} />
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button
+                        type="button"
+                        onClick={() => handleSort('rut')}
+                        className="inline-flex items-center gap-1 hover:text-foreground"
+                      >
+                        RUT
+                        <SortIcon column="rut" sortConfig={sortConfig} />
+                      </button>
+                    </TableHead>
                     <TableHead className="text-right">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger className="inline-flex items-center gap-1 cursor-default">
-                            Monto Total
-                            <InfoIcon className="h-3 w-3 text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[220px] text-center">
-                            Suma de facturas pendientes y aprobadas. Todo lo que se adeuda o ha sido pagado a este proveedor.
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      <button
+                        type="button"
+                        onClick={() => handleSort('pendiente')}
+                        className="inline-flex items-center gap-1 hover:text-foreground ml-auto"
+                      >
+                        Pendiente
+                        <SortIcon column="pendiente" sortConfig={sortConfig} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('aprobado')}
+                        className="inline-flex items-center gap-1 hover:text-foreground ml-auto"
+                      >
+                        Aprobado
+                        <SortIcon column="aprobado" sortConfig={sortConfig} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleSort('pagado')}
+                        className="inline-flex items-center gap-1 hover:text-foreground ml-auto"
+                      >
+                        Pagado
+                        <SortIcon column="pagado" sortConfig={sortConfig} />
+                      </button>
                     </TableHead>
                     <TableHead className="text-right">
                       <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger className="inline-flex items-center gap-1 cursor-default">
-                            Monto Aprobado
-                            <InfoIcon className="h-3 w-3 text-muted-foreground" />
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => handleSort('total')}
+                              className="inline-flex items-center gap-1 hover:text-foreground ml-auto"
+                            >
+                              Total
+                              <InfoIcon className="h-3 w-3 text-muted-foreground" />
+                              <SortIcon column="total" sortConfig={sortConfig} />
+                            </button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-[220px] text-center">
-                            Suma de facturas ya autorizadas para pago.
+                            Suma de facturas pendientes, aprobadas y pagadas.
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -256,13 +381,23 @@ export function SuppliersList(): React.JSX.Element {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className="text-sm font-medium">
-                          {formatCLP(supplier.totalInvoiceAmount)}
+                        <span className="text-sm">
+                          {formatCLP(supplier.pendingAmount)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="text-sm">
+                          {formatCLP(supplier.approvedAmount)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="text-sm">
+                          {formatCLP(supplier.paidAmount)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-sm font-medium">
-                          {formatCLP(supplier.totalApprovedAmount)}
+                          {formatCLP(supplier.totalInvoiceAmount)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -272,7 +407,7 @@ export function SuppliersList(): React.JSX.Element {
                   ))}
                   {suppliers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                         No se encontraron proveedores
                       </TableCell>
                     </TableRow>
@@ -295,13 +430,23 @@ export function SuppliersList(): React.JSX.Element {
                       {formatRut(supplier.taxIdentifier)}
                     </span>
                   </div>
-                  <div className="mt-3 flex justify-between text-xs text-muted-foreground">
-                    <span>Monto Total</span>
-                    <span>{formatCLP(supplier.totalInvoiceAmount)}</span>
-                  </div>
-                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                    <span>Monto Aprobado</span>
-                    <span>{formatCLP(supplier.totalApprovedAmount)}</span>
+                  <div className="mt-3 space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Pendiente</span>
+                      <span>{formatCLP(supplier.pendingAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Aprobado</span>
+                      <span>{formatCLP(supplier.approvedAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Pagado</span>
+                      <span>{formatCLP(supplier.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-medium">
+                      <span>Total</span>
+                      <span>{formatCLP(supplier.totalInvoiceAmount)}</span>
+                    </div>
                   </div>
                   <div className="mt-2">
                     <RespaldoBadge type={supplier.respaldoType} />
@@ -318,8 +463,8 @@ export function SuppliersList(): React.JSX.Element {
         )}
       </div>
 
-      {/* Pagination footer */}
-      {pagination && pagination.totalPages > 1 && (
+      {/* Pagination footer — hidden when amount sort is active (all results shown) */}
+      {pagination && pagination.totalPages > 1 && !isAmountSort && (
         <div className="flex items-center justify-between border-t px-4 py-3">
           <span className="text-sm text-muted-foreground">
             {`Página ${pagination.page} de ${pagination.totalPages} — ${pagination.total} proveedores`}
