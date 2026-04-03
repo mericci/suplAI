@@ -12,6 +12,7 @@ import { logger } from '../../../utils/logger.js';
 import * as invoiceDb from '../../../db/invoice.db.js';
 import * as orgDb from '../../../db/organization.db.js';
 import * as ruleDb from '../../../db/organization-rule.db.js';
+import * as eventDb from '../../../db/invoice-event.db.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import { toPublic } from '../types/index.js';
 import type { InvoicePublic } from '../types/index.js';
@@ -90,6 +91,16 @@ export async function approveInvoice(
     } as never);
 
     logger.info('Invoice approved', { invoiceId: id, approvedByUserId });
+
+    // Record timeline event (fire-and-forget)
+    eventDb.createEvent({
+      invoice_id: id,
+      organization_id: organizationId,
+      event_type: 'approved',
+      actor_user_id: approvedByUserId,
+      metadata: null,
+      occurred_at: new Date().toISOString(),
+    }).catch((e) => logger.warn('Failed to record approve event', { error: getErrorMessage(e) }));
 
     // Fire-and-forget SII notification if configured
     const rule = await ruleDb.findApplicableRule(

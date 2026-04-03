@@ -5,6 +5,7 @@
 import { logger } from '../../../utils/logger.ts';
 import * as nominaDb from '../../../db/nomina.db.ts';
 import * as invoiceDb from '../../../db/invoice.db.ts';
+import * as eventDb from '../../../db/invoice-event.db.ts';
 import { uploadFile } from '../../../storage/service.ts';
 import { extractVoucherAmount } from './extract-voucher-amount.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
@@ -105,6 +106,17 @@ export async function payNomina(
       voucher_storage_path: uploadedPath,
       voucher_storage_bucket: VOUCHER_BUCKET,
     });
+
+    eventDb.createEvents(
+      invoiceIds.map((invoiceId) => ({
+        invoice_id: invoiceId,
+        organization_id: orgId,
+        event_type: 'paid',
+        actor_user_id: userId,
+        metadata: { nomina_id: id } as never,
+        occurred_at: paidAt,
+      })),
+    ).catch((e: unknown) => logger.warn('Failed to record paid events', { error: getErrorMessage(e) }));
 
     logger.info('Nomina paid', { nominaId: id });
     return toPublic(updated, invoiceIds);

@@ -4,8 +4,9 @@
 
 import type {
   Database,
-  InvoiceStatus,
 } from '../../../types/supabase.js';
+
+type InvoiceStatus = Database['public']['Enums']['invoice_status'];
 
 type InvoiceRow = Database['public']['Tables']['invoices']['Row'];
 
@@ -57,7 +58,7 @@ export function toPublic(invoice: InvoiceRow): InvoicePublic {
     netAmount: invoice.net_amount,
     taxAmount: invoice.tax_amount,
     grossAmount: invoice.gross_amount,
-    aiValidationStatus: invoice.ai_validation_status,
+    aiValidationStatus: invoice.ai_validation_status as 'ok' | 'error' | null,
     aiValidationNotes: invoice.ai_validation_notes,
     createdAt: invoice.created_at,
     updatedAt: invoice.updated_at,

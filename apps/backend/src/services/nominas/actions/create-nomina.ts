@@ -8,6 +8,7 @@
 import { logger } from '../../../utils/logger.js';
 import * as nominaDb from '../../../db/nomina.db.js';
 import * as invoiceDb from '../../../db/invoice.db.js';
+import * as eventDb from '../../../db/invoice-event.db.js';
 import { CreateNominaSchema } from '../../../db/schemas/nomina.schema.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import type { NominaWithInvoiceIds } from '@supl/shared';
@@ -94,6 +95,19 @@ export async function createNomina(
     });
 
     await nominaDb.insertNominaInvoices(nominaRow.id, finalInvoiceIds);
+
+    // Record nomina_associated events for all invoices (fire-and-forget)
+    const now = new Date().toISOString();
+    eventDb.createEvents(
+      finalInvoiceIds.map((invoiceId) => ({
+        invoice_id: invoiceId,
+        organization_id: orgId,
+        event_type: 'nomina_associated',
+        actor_user_id: userId,
+        metadata: { nomina_id: nominaRow.id } as never,
+        occurred_at: now,
+      })),
+    ).catch((e) => logger.warn('Failed to record nomina_associated events', { error: getErrorMessage(e) }));
 
     logger.info('Nomina created', { nominaId: nominaRow.id });
     return toPublic(nominaRow, finalInvoiceIds);
