@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ClipboardListIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ interface PendingDistributionsTabProps {
 export function PendingDistributionsTab(
   { orgId }: PendingDistributionsTabProps,
 ): React.JSX.Element {
+  const router = useRouter();
   const [items, setItems] = useState<PendingDistributionInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +114,11 @@ export function PendingDistributionsTab(
           </TableHeader>
           <TableBody>
             {items.map((invoice) => (
-              <TableRow key={invoice.id}>
+              <TableRow
+                key={invoice.id}
+                className="cursor-pointer"
+                onClick={() => router.push(`/invoices/${invoice.id}?tab=contabilidad`)}
+              >
                 <TableCell className="font-medium max-w-[180px] truncate">{invoice.supplierName}</TableCell>
                 <TableCell className="text-muted-foreground">{invoice.folio}</TableCell>
                 <TableCell className="text-right font-medium">{formatCLP(invoice.netAmount)}</TableCell>
@@ -127,7 +133,7 @@ export function PendingDistributionsTab(
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <Button
                     variant="outline"
                     size="sm"

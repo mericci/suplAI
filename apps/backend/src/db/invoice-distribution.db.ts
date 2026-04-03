@@ -135,3 +135,37 @@ export async function getInvoiceIdsWithAccountingIdDistributions(
   if (error) throw new Error(`Database error: ${error.message}`);
   return new Set(((data ?? []) as Array<{ invoice_id: string }>).map((r) => r.invoice_id));
 }
+
+/**
+ * Get all cost center distributions for a specific invoice.
+ */
+export async function getCostCenterDistributionsByInvoiceId(
+  invoiceId: string,
+  organizationId: string,
+): Promise<InvoiceCostCenterDistributionRow[]> {
+  const { data, error } = await supabase
+    .from('invoice_cost_center_distributions' as never)
+    .select('*')
+    .eq('invoice_id', invoiceId)
+    .eq('organization_id', organizationId);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return (data ?? []) as InvoiceCostCenterDistributionRow[];
+}
+
+/**
+ * Get all accounting ID distributions for a specific invoice.
+ */
+export async function getAccountingIdDistributionsByInvoiceId(
+  invoiceId: string,
+  organizationId: string,
+): Promise<InvoiceAccountingIdDistributionRow[]> {
+  const { data, error } = await supabase
+    .from('invoice_accounting_id_distributions' as never)
+    .select('*')
+    .eq('invoice_id', invoiceId)
+    .eq('organization_id', organizationId);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return (data ?? []) as InvoiceAccountingIdDistributionRow[];
+}
