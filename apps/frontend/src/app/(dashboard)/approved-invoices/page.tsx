@@ -3,6 +3,7 @@
 import {
   useEffect, useRef, useState, useCallback, useMemo,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   SearchIcon,
   FilterIcon,
@@ -220,6 +221,7 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function ApprovedInvoicesPage(): React.JSX.Element {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>(NOMINA_TAB.FACTURAS);
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [search, setSearch] = useState('');
@@ -962,9 +964,9 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                             handleRowCheckboxChange(inv.id, !!v);
                           };
                           return (
-                            <TableRow key={inv.id} className={isLocked ? 'opacity-60' : ''}>
+                            <TableRow key={inv.id} className={cn('cursor-pointer', isLocked ? 'opacity-60' : '')} onClick={() => router.push(`/invoices/${inv.id}`)}>
                               {isAdmin && (
-                                <TableCell>
+                                <TableCell onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
                                     checked={selectedInvoiceIds.has(inv.id)}
                                     onCheckedChange={onCheckChange}
@@ -1092,7 +1094,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                     {filtered.map((inv) => {
                       const isLocked = lockedInvoiceIds.has(inv.id);
                       return (
-                        <div key={inv.id} className={cn('rounded-lg border bg-card p-4 shadow-sm', isLocked && 'opacity-60')}>
+                        <div key={inv.id} className={cn('rounded-lg border bg-card p-4 shadow-sm cursor-pointer', isLocked && 'opacity-60')} onClick={() => router.push(`/invoices/${inv.id}`)}>
                           <div className="flex items-start justify-between">
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
@@ -1129,11 +1131,13 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                               </span>
                             </div>
                             {isAdmin && !isLocked && (
-                              <Checkbox
-                                checked={selectedInvoiceIds.has(inv.id)}
-                                onCheckedChange={(v) => handleRowCheckboxChange(inv.id, Boolean(v))}
-                                aria-label={`Seleccionar factura ${inv.documentNumber}`}
-                              />
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={selectedInvoiceIds.has(inv.id)}
+                                  onCheckedChange={(v) => handleRowCheckboxChange(inv.id, Boolean(v))}
+                                  aria-label={`Seleccionar factura ${inv.documentNumber}`}
+                                />
+                              </div>
                             )}
                           </div>
                           <div className="mt-3 flex items-center justify-between">

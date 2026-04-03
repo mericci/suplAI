@@ -143,6 +143,42 @@ export async function insertNominaInvoices(
 }
 
 /**
+ * Find the nomina that contains a specific invoice (if any).
+ * Returns the most recent non-deleted nomina containing this invoice.
+ */
+export async function findNominaByInvoiceId(
+  invoiceId: string,
+  orgId: string,
+): Promise<NominaRow | null> {
+  // Find nomina_id for this invoice
+  const { data: links, error: linkError } = await supabase
+    .from('nomina_invoices')
+    .select('nomina_id')
+    .eq('invoice_id', invoiceId);
+
+  if (linkError) throw new Error(`Database error: ${linkError.message}`);
+  if (!links || links.length === 0) return null;
+
+  const nominaIds = (links as Array<{ nomina_id: string }>).map((l) => l.nomina_id);
+
+  const { data, error } = await supabase
+    .from('nominas')
+    .select('*')
+    .in('id', nominaIds)
+    .eq('organization_id', orgId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Database error: ${error.message}`);
+  }
+  return data as NominaRow;
+}
+
+/**
  * Get invoice IDs associated with a nomina.
  */
 export async function findInvoiceIdsByNominaId(nominaId: string): Promise<string[]> {
