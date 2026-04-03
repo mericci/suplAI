@@ -9,6 +9,7 @@
 import { logger } from '../../../utils/logger.js';
 import * as nominaDb from '../../../db/nomina.db.js';
 import * as invoiceDb from '../../../db/invoice.db.js';
+import * as eventDb from '../../../db/invoice-event.db.js';
 import { uploadFile } from '../../../storage/service.js';
 import { extractVoucherAmount } from './extract-voucher-amount.js';
 import { getErrorMessage } from '../../../utils/error.js';
@@ -101,6 +102,18 @@ export async function payNomina(
       voucher_storage_path: uploadedPath,
       voucher_storage_bucket: VOUCHER_BUCKET,
     });
+
+    // Record paid events for all invoices (fire-and-forget)
+    eventDb.createEvents(
+      invoiceIds.map((invoiceId) => ({
+        invoice_id: invoiceId,
+        organization_id: orgId,
+        event_type: 'paid',
+        actor_user_id: userId,
+        metadata: { nomina_id: id } as never,
+        occurred_at: paidAt,
+      })),
+    ).catch((e) => logger.warn('Failed to record paid events', { error: getErrorMessage(e) }));
 
     logger.info('Nomina paid', { nominaId: id });
     return toPublic(updated, invoiceIds);

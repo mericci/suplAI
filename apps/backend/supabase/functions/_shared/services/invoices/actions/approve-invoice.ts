@@ -12,6 +12,7 @@ import { logger } from '../../../utils/logger.ts';
 import * as invoiceDb from '../../../db/invoice.db.ts';
 import * as orgDb from '../../../db/organization.db.ts';
 import * as ruleDb from '../../../db/organization-rule.db.ts';
+import * as eventDb from '../../../db/invoice-event.db.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
 import { toPublic } from '../types/index.ts';
 import type { InvoicePublic } from '../types/index.ts';
@@ -84,6 +85,15 @@ export async function approveInvoice(
     } as never);
 
     logger.info('Invoice approved', { invoiceId: id, approvedByUserId });
+
+    eventDb.createEvent({
+      invoice_id: id,
+      organization_id: organizationId,
+      event_type: 'approved',
+      actor_user_id: approvedByUserId,
+      metadata: null,
+      occurred_at: new Date().toISOString(),
+    }).catch((e: unknown) => logger.warn('Failed to record approve event', { error: getErrorMessage(e) }));
 
     // Fire-and-forget SII notification if configured
     const rule = await ruleDb.findApplicableRule(

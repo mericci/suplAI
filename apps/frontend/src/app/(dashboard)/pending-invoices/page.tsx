@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   SearchIcon,
   FilterIcon,
@@ -313,6 +314,7 @@ function BudgetStatusCell({ invoiceId, budgetStatuses }: BudgetStatusCellProps):
 /* ------------------------------------------------------------------ */
 
 export default function PendingInvoicesPage(): React.JSX.Element {
+  const router = useRouter();
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -857,7 +859,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((inv) => (
-                    <TableRow key={inv.id}>
+                    <TableRow key={inv.id} className="cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
@@ -903,7 +905,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                           {statusLabel(inv.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -952,7 +954,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
             {/* Mobile cards */}
             <div className="flex flex-col gap-3 p-4 md:hidden">
               {filtered.map((inv) => (
-                <div key={inv.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                <div key={inv.id} className="rounded-lg border bg-card p-4 shadow-sm cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
                   <div className="flex items-start justify-between">
                     <div className="flex flex-col gap-1">
                       <span className="font-medium">{inv.supplierName}</span>
@@ -962,6 +964,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         {inv.documentNumber}
                       </span>
                     </div>
+                    <div onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -989,6 +992,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>

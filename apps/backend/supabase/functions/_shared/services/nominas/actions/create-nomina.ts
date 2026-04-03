@@ -5,6 +5,7 @@
 import { logger } from '../../../utils/logger.ts';
 import * as nominaDb from '../../../db/nomina.db.ts';
 import * as invoiceDb from '../../../db/invoice.db.ts';
+import * as eventDb from '../../../db/invoice-event.db.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
 import { z } from 'zod';
 
@@ -104,6 +105,18 @@ export async function createNomina(
     });
 
     await nominaDb.insertNominaInvoices(nominaRow.id, finalInvoiceIds);
+
+    const now = new Date().toISOString();
+    eventDb.createEvents(
+      finalInvoiceIds.map((invoiceId) => ({
+        invoice_id: invoiceId,
+        organization_id: orgId,
+        event_type: 'nomina_associated',
+        actor_user_id: userId,
+        metadata: { nomina_id: nominaRow.id } as never,
+        occurred_at: now,
+      })),
+    ).catch((e: unknown) => logger.warn('Failed to record nomina_associated events', { error: getErrorMessage(e) }));
 
     logger.info('Nomina created', { nominaId: nominaRow.id });
     return toPublic(nominaRow, finalInvoiceIds);

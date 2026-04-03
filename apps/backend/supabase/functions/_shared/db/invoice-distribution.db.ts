@@ -91,3 +91,53 @@ export async function getInvoiceIdsWithAccountingIdDistributions(
   if (error) throw new Error(`Database error: ${error.message}`);
   return new Set(((data ?? []) as Array<{ invoice_id: string }>).map((r) => r.invoice_id));
 }
+
+export interface InvoiceCostCenterDistributionRow {
+  id: string;
+  invoice_id: string;
+  cost_center_id: string;
+  organization_id: string;
+  amount: number;
+  percentage: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvoiceAccountingIdDistributionRow {
+  id: string;
+  invoice_id: string;
+  accounting_id: string;
+  organization_id: string;
+  amount: number;
+  percentage: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getCostCenterDistributionsByInvoiceId(
+  invoiceId: string,
+  organizationId: string,
+): Promise<InvoiceCostCenterDistributionRow[]> {
+  const { data, error } = await supabase
+    .from('invoice_cost_center_distributions' as never)
+    .select('*')
+    .eq('invoice_id', invoiceId)
+    .eq('organization_id', organizationId);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return (data ?? []) as InvoiceCostCenterDistributionRow[];
+}
+
+export async function getAccountingIdDistributionsByInvoiceId(
+  invoiceId: string,
+  organizationId: string,
+): Promise<InvoiceAccountingIdDistributionRow[]> {
+  const { data, error } = await supabase
+    .from('invoice_accounting_id_distributions' as never)
+    .select('*')
+    .eq('invoice_id', invoiceId)
+    .eq('organization_id', organizationId);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return (data ?? []) as InvoiceAccountingIdDistributionRow[];
+}

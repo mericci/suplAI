@@ -18,6 +18,13 @@ import {
   validateInvoiceHandler,
   listPendingDistributionsHandler,
   createInvoiceDistributionsHandler,
+  getInvoiceDistributionsHandler,
+  getInvoiceNominaHandler,
+  getInvoiceCommentsHandler,
+  createInvoiceCommentHandler,
+  getInvoiceEventsHandler,
+  getInvoiceDocumentsHandler,
+  uploadInvoiceDocumentHandler,
 } from './http/index.ts';
 import { requireAuth } from '../../auth/middleware.ts';
 
@@ -38,6 +45,12 @@ export function registerInvoiceRoutes(router: Router): void {
   router.get(
     '/api/organizations/:orgId/invoices',
     requireAuth(async (req) => listInvoicesHandler(req)),
+  );
+
+  // List invoices pending manual distribution (must be before /:id)
+  router.get(
+    '/api/organizations/:orgId/invoices/pending-distributions',
+    requireAuth(async (req) => listPendingDistributionsHandler(req)),
   );
 
   // Get a specific invoice
@@ -88,15 +101,44 @@ export function registerInvoiceRoutes(router: Router): void {
     requireAuth(async (req) => deleteInvoiceHandler(req)),
   );
 
-  // List invoices pending manual distribution
-  router.get(
-    '/api/organizations/:orgId/invoices/pending-distributions',
-    requireAuth(async (req) => listPendingDistributionsHandler(req)),
-  );
-
   // Submit manual distribution records for an invoice
   router.post(
     '/api/organizations/:orgId/invoices/:id/distributions',
     requireAuth(async (req) => createInvoiceDistributionsHandler(req)),
+  );
+
+  router.get(
+    '/api/organizations/:orgId/invoices/:id/distributions',
+    requireAuth(async (req) => getInvoiceDistributionsHandler(req)),
+  );
+
+  router.get(
+    '/api/organizations/:orgId/invoices/:id/nomina',
+    requireAuth(async (req) => getInvoiceNominaHandler(req)),
+  );
+
+  router.get(
+    '/api/organizations/:orgId/invoices/:id/comments',
+    requireAuth(async (req) => getInvoiceCommentsHandler(req)),
+  );
+
+  router.post(
+    '/api/organizations/:orgId/invoices/:id/comments',
+    requireAuth(async (req, context) => createInvoiceCommentHandler(req, context)),
+  );
+
+  router.get(
+    '/api/organizations/:orgId/invoices/:id/events',
+    requireAuth(async (req) => getInvoiceEventsHandler(req)),
+  );
+
+  router.get(
+    '/api/organizations/:orgId/invoices/:id/documents',
+    requireAuth(async (req) => getInvoiceDocumentsHandler(req)),
+  );
+
+  router.post(
+    '/api/organizations/:orgId/invoices/:id/documents',
+    requireAuth(async (req, context) => uploadInvoiceDocumentHandler(req, context)),
   );
 }
