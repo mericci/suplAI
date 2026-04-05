@@ -205,6 +205,7 @@ export interface Database {
           gross_amount: number | null;
           ai_validation_status: 'ok' | 'error' | null;
           ai_validation_notes: string | null;
+          dte_xml: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -231,6 +232,7 @@ export interface Database {
           gross_amount?: number | null;
           ai_validation_status?: 'ok' | 'error' | null;
           ai_validation_notes?: string | null;
+          dte_xml?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -257,6 +259,7 @@ export interface Database {
           gross_amount?: number | null;
           ai_validation_status?: 'ok' | 'error' | null;
           ai_validation_notes?: string | null;
+          dte_xml?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;

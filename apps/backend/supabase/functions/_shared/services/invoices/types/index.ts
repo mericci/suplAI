@@ -31,6 +31,7 @@ export interface InvoicePublic {
   grossAmount: number | null;
   aiValidationStatus: 'ok' | 'error' | null;
   aiValidationNotes: string | null;
+  dteXml: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -59,6 +60,7 @@ export function toPublic(invoice: InvoiceRow): InvoicePublic {
     grossAmount: invoice.gross_amount,
     aiValidationStatus: invoice.ai_validation_status,
     aiValidationNotes: invoice.ai_validation_notes,
+    dteXml: invoice.dte_xml ?? null,
     createdAt: invoice.created_at,
     updatedAt: invoice.updated_at,
     deletedAt: invoice.deleted_at,

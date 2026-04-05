@@ -20,6 +20,7 @@ import { getOrgInvoices } from '@/integrations/backend/sii/get-org-invoices';
 import { getInvoiceEvents } from '@/integrations/backend/invoices/get-invoice-events';
 import { getInvoiceComments, createInvoiceComment } from '@/integrations/backend/invoices/get-invoice-comments';
 import { getInvoiceDocuments, uploadInvoiceDocument } from '@/integrations/backend/invoices/get-invoice-documents';
+import { fetchInvoiceDteXml } from '@/integrations/backend/invoices/fetch-invoice-dte-xml';
 import { getInvoiceDistributions } from '@/integrations/backend/invoices/get-invoice-distributions';
 import { getInvoiceNomina } from '@/integrations/backend/invoices/get-invoice-nomina';
 import { getSupplier } from '@/integrations/backend/suppliers/get-supplier';
@@ -319,11 +320,23 @@ function TimelineTab({ orgId, invoiceId }: { orgId: string; invoiceId: string })
 /*  Tab: Documentos                                                    */
 /* ------------------------------------------------------------------ */
 
-function DocumentosTab({ orgId, invoiceId }: { orgId: string; invoiceId: string }) {
+function DocumentosTab({
+  orgId,
+  invoiceId,
+  invoice,
+  onInvoiceUpdated,
+}: {
+  orgId: string;
+  invoiceId: string;
+  invoice: Invoice | null;
+  onInvoiceUpdated: (updated: Invoice) => void;
+}) {
   const [docs, setDocs] = useState<InvoiceDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [fetchingXml, setFetchingXml] = useState(false);
+  const [fetchXmlError, setFetchXmlError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -349,13 +362,65 @@ function DocumentosTab({ orgId, invoiceId }: { orgId: string; invoiceId: string 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleFetchXml = async () => {
+    setFetchingXml(true);
+    setFetchXmlError(null);
+    try {
+      const res = await fetchInvoiceDteXml(orgId, invoiceId);
+      if (res.success && res.data) {
+        onInvoiceUpdated(res.data);
+      } else {
+        setFetchXmlError('No se pudo obtener el documento XML. Intenta más tarde.');
+      }
+    } catch {
+      setFetchXmlError('Error al obtener el documento XML.');
+    }
+    setFetchingXml(false);
+  };
+
   return (
     <div className="space-y-4">
-      {/* XML placeholder — minimal, non-blocking */}
-      <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-muted-foreground text-xs">
-        <FileText aria-hidden="true" className="h-4 w-4 shrink-0" />
-        <span>Documento XML del SII — descarga directa próximamente disponible.</span>
-      </div>
+      {/* DTE XML section */}
+      {invoice?.dteXml ? (
+        <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm bg-muted/40">
+          <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1 text-muted-foreground">Documento XML del SII disponible.</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const blob = new Blob([invoice.dteXml!], { type: 'application/xml' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `dte-${invoiceId}.xml`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Descargar XML
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 rounded-lg border border-dashed px-3 py-3">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <FileText aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <span>Documento XML del SII no disponible.</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            onClick={handleFetchXml}
+            disabled={fetchingXml}
+          >
+            {fetchingXml ? 'Obteniendo…' : 'Obtener documento XML'}
+          </Button>
+          {fetchXmlError && (
+            <p role="alert" className="text-xs text-red-600">{fetchXmlError}</p>
+          )}
+        </div>
+      )}
 
       <SectionCard title="Documentos Complementarios">
         <div className="flex justify-end mb-3">
@@ -888,7 +953,7 @@ export default function InvoiceProfilePage() {
             {orgId && <TimelineTab orgId={orgId} invoiceId={invoiceId} />}
           </TabsContent>
           <TabsContent value="documentos" className="mt-0">
-            {orgId && <DocumentosTab orgId={orgId} invoiceId={invoiceId} />}
+            {orgId && <DocumentosTab orgId={orgId} invoiceId={invoiceId} invoice={invoice} onInvoiceUpdated={setInvoice} />}
           </TabsContent>
           <TabsContent value="contabilidad" className="mt-0">
             {orgId && <ContabilidadTab orgId={orgId} invoiceId={invoiceId} />}

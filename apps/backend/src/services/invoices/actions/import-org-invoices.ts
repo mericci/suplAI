@@ -18,6 +18,7 @@ import { upsertInvoice } from './upsert-invoice.js';
 import { upsertOrgSupplier } from './upsert-org-supplier.js';
 import { validatePendingInvoicesSiiStatus } from './validate-pending-invoices-sii-status.js';
 import { validateInvoiceAi } from './validate-invoice-ai.js';
+import { fetchInvoiceDteXml } from './fetch-invoice-dte-xml.js';
 import { logger } from '../../../utils/logger.js';
 import { getErrorMessage } from '../../../utils/error.js';
 
@@ -53,7 +54,7 @@ export async function importOrgInvoices(
   const now = new Date();
   const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  const { invoices, siiToken } = await getSiiInvoices({
+  const { invoices, siiToken, client } = await getSiiInvoices({
     taxPayerDni: dni,
     taxPayerDv: dv,
     password,
@@ -93,6 +94,20 @@ export async function importOrgInvoices(
         logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
       });
     }
+
+    fetchInvoiceDteXml({
+      invoiceId: upserted.id,
+      organizationId: orgId,
+      siiToken,
+      client,
+      receiverDni: dni,
+      receiverDv: dv,
+      documentTypeNumber: invoice.documentTypeNumber,
+      documentNumber: invoice.documentNumber,
+      issuerTaxIdentifier: upserted.issuerTaxIdentifier,
+    }).catch((err) => {
+      logger.warn('DTE XML fetch fire-and-forget error', { error: getErrorMessage(err) });
+    });
   }
 
   await validatePendingInvoicesSiiStatus(orgId, siiToken);
