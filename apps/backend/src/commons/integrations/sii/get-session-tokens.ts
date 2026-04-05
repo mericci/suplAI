@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
+import type { Store } from 'tough-cookie';
 import { GetSessionTokensResponse } from './types';
 
 interface GetSessionTokensParams {
@@ -35,7 +36,7 @@ async function getSessionTokens({
 }: GetSessionTokensParams): Promise<GetSessionTokensResponse> {
   const jar = new CookieJar();
   const client = wrapper(
-    axios.create({ jar, withCredentials: true, maxRedirects: 5 }),
+    axios.create({ jar, withCredentials: true, maxRedirects: 10 }),
   );
 
   // ── Step 1: GET the login page ──────────────────────────────────────────
@@ -114,13 +115,15 @@ async function getSessionTokens({
     },
   }).catch(() => { /* non-fatal — TOKEN already available from Step 3 */ });
 
-  // ── Step 5: Collect TOKEN from all SII domains ──────────────────────────
-  const allCookies = [
-    ...await jar.getCookies('https://sii.cl'),
-    ...await jar.getCookies('https://misiir.sii.cl'),
-    ...await jar.getCookies('https://www4.sii.cl'),
-    ...await jar.getCookies('https://zeusr.sii.cl'),
-  ];
+  // ── Step 5: Collect TOKEN from all cookies in the jar ──────────────────
+  // SII may set the TOKEN cookie on different subdomains depending on the
+  // redirect chain, so we scan the entire jar instead of specific domains.
+  const allCookies = await new Promise<{ key: string; value: string }[]>((resolve, reject) => {
+    (jar.store as Store).getAllCookies((err, cookies) => {
+      if (err) reject(err);
+      else resolve((cookies ?? []) as { key: string; value: string }[]);
+    });
+  });
 
   const tokenCookie = allCookies.find((c) => c.key === 'TOKEN');
   if (!tokenCookie) {

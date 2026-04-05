@@ -18,3 +18,4 @@ export { createInvoiceCommentHandler } from './create-invoice-comment.ts';
 export { getInvoiceEventsHandler } from './get-invoice-events.ts';
 export { getInvoiceDocumentsHandler } from './get-invoice-documents.ts';
 export { uploadInvoiceDocumentHandler } from './upload-invoice-document.ts';
+export { fetchInvoiceDteXmlHttpHandler } from './fetch-invoice-dte-xml.ts';

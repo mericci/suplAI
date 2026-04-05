@@ -499,6 +499,7 @@ export type Database = {
           document_number: string
           document_type: string
           document_type_number: number
+          dte_xml: string | null
           due_date: string | null
           executive_title_date: string | null
           external_unique_key: string
@@ -527,6 +528,7 @@ export type Database = {
           document_number: string
           document_type: string
           document_type_number: number
+          dte_xml?: string | null
           due_date?: string | null
           executive_title_date?: string | null
           external_unique_key: string
@@ -555,6 +557,7 @@ export type Database = {
           document_number?: string
           document_type?: string
           document_type_number?: number
+          dte_xml?: string | null
           due_date?: string | null
           executive_title_date?: string | null
           external_unique_key?: string

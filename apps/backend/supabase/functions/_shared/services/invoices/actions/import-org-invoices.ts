@@ -17,6 +17,7 @@ import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.ts';
 import { upsertInvoice } from './upsert-invoice.ts';
 import { upsertOrgSupplier } from './upsert-org-supplier.ts';
 import { validateInvoiceAi } from './validate-invoice-ai.ts';
+import { fetchInvoiceDteXml } from './fetch-invoice-dte-xml.ts';
 import { logger } from '../../../utils/logger.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
 
@@ -52,7 +53,7 @@ export async function importOrgInvoices(
   const now = new Date();
   const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  const { invoices } = await getSiiInvoices({
+  const { invoices, siiToken, cookieString } = await getSiiInvoices({
     taxPayerDni: dni,
     taxPayerDv: dv,
     password,
@@ -92,6 +93,20 @@ export async function importOrgInvoices(
         logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
       });
     }
+
+    fetchInvoiceDteXml({
+      invoiceId: upserted.id,
+      organizationId: orgId,
+      siiToken,
+      cookieString,
+      receiverDni: dni,
+      receiverDv: dv,
+      documentTypeNumber: invoice.documentTypeNumber,
+      documentNumber: invoice.documentNumber,
+      issuerTaxIdentifier: upserted.issuer_tax_identifier,
+    }).catch((err) => {
+      logger.warn('DTE XML fetch fire-and-forget error', { error: getErrorMessage(err) });
+    });
   }
 
   return invoices.length;

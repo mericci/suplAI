@@ -19,4 +19,5 @@ export interface Invoice {
   grossAmount: number | null;
   aiValidationStatus: 'ok' | 'error' | null;
   aiValidationNotes: string | null;
+  dteXml: string | null;
 }

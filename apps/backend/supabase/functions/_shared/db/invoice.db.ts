@@ -132,6 +132,47 @@ export async function findLatestByOrganization(
 }
 
 /**
+ * Store the DTE XML for an invoice.
+ * The IS NULL guard makes this idempotent — skips if already set.
+ */
+export async function updateDteXml(
+  id: string,
+  organizationId: string,
+  dteXml: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('invoices')
+    .update({ dte_xml: dteXml } as never)
+    .eq('id', id)
+    .eq('organization_id', organizationId)
+    .is('deleted_at', null)
+    .is('dte_xml', null);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+}
+
+/**
+ * Find active invoices for an organization that don't yet have dte_xml stored.
+ * Used for backfill operations.
+ */
+export async function findWithoutDteXml(
+  organizationId: string,
+  limit = 50,
+): Promise<Invoice[]> {
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .is('deleted_at', null)
+    .is('dte_xml', null)
+    .order('issue_date', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return data ?? [];
+}
+
+/**
  * List active invoices for an organization with optional filters and pagination.
  */
 export async function findAllByOrganization(
