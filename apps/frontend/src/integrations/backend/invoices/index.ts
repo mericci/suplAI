@@ -14,3 +14,4 @@ export { getInvoiceEvents } from './get-invoice-events';
 export type { TimelineEvent } from './get-invoice-events';
 export { getInvoiceDocuments, uploadInvoiceDocument } from './get-invoice-documents';
 export type { InvoiceDocument } from './get-invoice-documents';
+export { fetchInvoiceDteXml } from './fetch-invoice-dte-xml';

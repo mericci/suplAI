@@ -53,6 +53,7 @@ export const UpdateInvoiceSchema = z.object({
   dueDate: z.coerce.date().optional().nullable(),
   approvedByUserId: z.string().uuid().optional().nullable(),
   approvedAt: z.coerce.date().optional().nullable(),
+  dteXml: z.string().nullable().optional(),
 });
 
 export const InvoiceListFiltersSchema = z.object({

@@ -20,6 +20,7 @@ import { upsertSupplier } from '../../suppliers/actions/upsert-supplier.ts';
 import { upsertOrgSupplier } from './upsert-org-supplier.ts';
 import { upsertInvoice } from './upsert-invoice.ts';
 import { validateInvoiceAi } from './validate-invoice-ai.ts';
+import { fetchInvoiceDteXml } from './fetch-invoice-dte-xml.ts';
 import { rejectInvoice } from './reject-invoice.ts';
 import { approveInvoice } from './approve-invoice.ts';
 import { sendEmail } from '../../../commons/email/send-email.ts';
@@ -142,7 +143,7 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
     const password = await decrypt(org.tax_authority_password_enc);
     const { dni, dv } = parseChileanRut(org.tax_identifier);
 
-    const { invoices } = await getSiiInvoices({
+    const { invoices, siiToken, cookieString } = await getSiiInvoices({
       taxPayerDni: dni,
       taxPayerDv: dv,
       password,
@@ -186,6 +187,20 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
           logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
         });
       }
+
+      fetchInvoiceDteXml({
+        invoiceId: upserted.id,
+        organizationId: orgId,
+        siiToken,
+        cookieString,
+        receiverDni: dni,
+        receiverDv: dv,
+        documentTypeNumber: invoice.documentTypeNumber,
+        documentNumber: invoice.documentNumber,
+        issuerTaxIdentifier: upserted.issuer_tax_identifier,
+      }).catch((err) => {
+        logger.warn('DTE XML fetch fire-and-forget error', { error: getErrorMessage(err) });
+      });
     }
 
     // Process mérito rules for all pending invoices

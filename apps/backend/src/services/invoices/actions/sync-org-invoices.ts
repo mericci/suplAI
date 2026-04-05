@@ -31,6 +31,7 @@ import { upsertOrgSupplier } from './upsert-org-supplier.js';
 import { upsertInvoice } from './upsert-invoice.js';
 import { validatePendingInvoicesSiiStatus } from './validate-pending-invoices-sii-status.js';
 import { validateInvoiceAi } from './validate-invoice-ai.js';
+import { fetchInvoiceDteXml } from './fetch-invoice-dte-xml.js';
 import { rejectInvoice } from './reject-invoice.js';
 import { approveInvoice } from './approve-invoice.js';
 import { sendEmail } from '../../../commons/email/send-email.js';
@@ -159,7 +160,7 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
     const password = decrypt(org.tax_authority_password_enc);
     const { dni, dv } = parseChileanRut(org.tax_identifier);
 
-    const { invoices, siiToken } = await getSiiInvoices({
+    const { invoices, siiToken, client } = await getSiiInvoices({
       taxPayerDni: dni,
       taxPayerDv: dv,
       password,
@@ -203,6 +204,20 @@ export async function syncOrgInvoices(orgId: string): Promise<void> {
           logger.warn('AI validation fire-and-forget error', { error: getErrorMessage(err) });
         });
       }
+
+      fetchInvoiceDteXml({
+        invoiceId: upserted.id,
+        organizationId: orgId,
+        siiToken,
+        client,
+        receiverDni: dni,
+        receiverDv: dv,
+        documentTypeNumber: invoice.documentTypeNumber,
+        documentNumber: invoice.documentNumber,
+        issuerTaxIdentifier: upserted.issuerTaxIdentifier,
+      }).catch((err) => {
+        logger.warn('DTE XML fetch fire-and-forget error', { error: getErrorMessage(err) });
+      });
     }
 
     // Validate SII event status for all pending invoices

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { AxiosInstance } from 'axios';
 import { Invoice } from '../../../types';
 import {
   getReceivedDteByPeriod,
@@ -21,6 +22,7 @@ interface GetSiiInvoicesByPeriodParams {
 interface GetSiiInvoicesByPeriodResponse {
   invoices: Invoice[];
   siiToken: string;
+  client: AxiosInstance;
 }
 
 async function getSiiInvoices({
@@ -111,7 +113,7 @@ async function getSiiInvoices({
     }
   }
 
-  return { invoices, siiToken: sessionsTokens.siiToken };
+  return { invoices, siiToken: sessionsTokens.siiToken, client: sessionsTokens.client };
 }
 
 export default getSiiInvoices;
