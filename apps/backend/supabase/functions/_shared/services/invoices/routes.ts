@@ -25,6 +25,7 @@ import {
   getInvoiceEventsHandler,
   getInvoiceDocumentsHandler,
   uploadInvoiceDocumentHandler,
+  fetchInvoiceDteXmlHttpHandler,
 } from './http/index.ts';
 import { requireAuth } from '../../auth/middleware.ts';
 
@@ -140,5 +141,11 @@ export function registerInvoiceRoutes(router: Router): void {
   router.post(
     '/api/organizations/:orgId/invoices/:id/documents',
     requireAuth(async (req, context) => uploadInvoiceDocumentHandler(req, context)),
+  );
+
+  // Fetch DTE XML on demand from SII
+  router.patch(
+    '/api/organizations/:orgId/invoices/:id/fetch-dte-xml',
+    requireAuth(async (req) => fetchInvoiceDteXmlHttpHandler(req)),
   );
 }

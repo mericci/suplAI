@@ -19,6 +19,8 @@ interface GetSiiInvoicesByPeriodParams {
 
 interface GetSiiInvoicesByPeriodResponse {
   invoices: Invoice[];
+  siiToken: string;
+  cookieString: string;
 }
 
 async function getSiiInvoices({
@@ -107,7 +109,7 @@ async function getSiiInvoices({
     }
   }
 
-  return { invoices };
+  return { invoices, siiToken: sessionTokens.siiToken, cookieString: sessionTokens.cookieString };
 }
 
 export default getSiiInvoices;
