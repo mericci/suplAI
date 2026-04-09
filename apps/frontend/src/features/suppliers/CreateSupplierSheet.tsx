@@ -21,14 +21,16 @@ import {
   upsertSupplier,
   extractSupplierDocument,
   createSupplierDocument,
+  listSupplierServices,
+  createSupplierService,
 } from '@/integrations/backend/suppliers';
-import type { ExtractedDocumentData, Supplier } from '@/integrations/backend/suppliers';
+import type { ExtractedDocumentData, Supplier, SupplierService } from '@/integrations/backend/suppliers';
 import { createClient } from '@/lib/supabase/client';
 import { formatRut } from '@/lib/rut';
 import { HttpError } from '@/lib/http';
 
 type Status = 'idle' | 'extracting' | 'loading' | 'success' | 'error';
-type Step = 'upload' | 'form';
+type Step = 'upload' | 'service_check' | 'form';
 
 interface Amount {
   amount: string;
@@ -58,6 +60,8 @@ export interface CreateSupplierSheetProps {
   supplierId?: string;
   /** Supplier data used for RUT mismatch check when supplierId is set */
   supplier?: Supplier;
+  /** Organization ID — used to fetch and manage services when supplierId is set */
+  orgId?: string;
   /** Trigger element override — if not provided, renders the default "Nuevo proveedor" button */
   trigger?: React.ReactNode;
 }
@@ -82,6 +86,7 @@ export function CreateSupplierSheet({
   onSuccess,
   supplierId: presetSupplierId,
   supplier: presetSupplier,
+  orgId: presetOrgId,
   trigger,
 }: CreateSupplierSheetProps): React.JSX.Element {
   const router = useRouter();
@@ -118,6 +123,10 @@ export function CreateSupplierSheet({
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [documentRole, setDocumentRole] = useState<'cost_contract' | 'additional'>('cost_contract');
+
+  // Service resolution state
+  const [existingServices, setExistingServices] = useState<SupplierService[]>([]);
+  const [resolvedServiceId, setResolvedServiceId] = useState<string | null>(null);
 
   function setField<K extends keyof FormFields>(key: K, value: FormFields[K]): void {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -210,6 +219,17 @@ export function CreateSupplierSheet({
           }
         }
 
+        // Service check: when adding a cost contract to an existing supplier+org, check for existing services
+        const inferredRole = (res.data.tariffType || res.data.amounts.length > 0) ? 'cost_contract' : 'additional';
+        if (inferredRole === 'cost_contract' && presetSupplierId && presetOrgId) {
+          const servicesRes = await listSupplierServices(presetSupplierId, presetOrgId);
+          if (servicesRes.success && servicesRes.data && servicesRes.data.length > 0) {
+            setExistingServices(servicesRes.data);
+            setStep('service_check');
+            return;
+          }
+        }
+
         setStep('form');
       }
     } catch {
@@ -288,7 +308,21 @@ export function CreateSupplierSheet({
         }
       }
 
-      // Step 3: create document record if there's a file or service data
+      // Step 3: resolve service ID for cost contracts
+      let finalServiceId: string | null = resolvedServiceId;
+      if (documentRole === 'cost_contract' && supplierId && presetOrgId && finalServiceId === null) {
+        const orgId = presetOrgId;
+        const svcRes = await createSupplierService(supplierId, {
+          organizationId: orgId,
+          serviceCategory: fields.serviceCategory || 'General',
+          serviceDescription: fields.serviceDescription || null,
+        });
+        if (svcRes.success && svcRes.data) {
+          finalServiceId = svcRes.data.id;
+        }
+      }
+
+      // Step 4: create document record if there's a file or service data
       const hasServiceData = fields.serviceDescription || fields.serviceCategory
         || fields.tariffType || fields.tariffDetail || fields.amounts.length > 0;
 
@@ -297,6 +331,7 @@ export function CreateSupplierSheet({
           fileName: selectedFile!.name,
           storagePath,
           documentType: null,
+          serviceId: finalServiceId,
           documentRole,
           serviceCategory: fields.serviceCategory || null,
           serviceDescription: fields.serviceDescription || null,
@@ -334,6 +369,8 @@ export function CreateSupplierSheet({
   function handleReset(): void {
     setStep('upload');
     setDocumentRole('cost_contract');
+    setExistingServices([]);
+    setResolvedServiceId(null);
     setFields({
       legalName: '', taxIdentifier: '', serviceDescription: '', serviceCategory: '', tariffType: '', tariffDetail: '', amounts: [],
     });
@@ -373,9 +410,9 @@ export function CreateSupplierSheet({
         <SheetHeader className="border-b px-4 py-4">
           <SheetTitle>{presetSupplierId ? 'Agregar documento' : 'Nuevo proveedor'}</SheetTitle>
           <SheetDescription>
-            {step === 'upload'
-              ? 'Sube un documento para autocompletar los datos del proveedor con IA.'
-              : 'Revisa y completa la información del proveedor y servicio.'}
+            {step === 'upload' && 'Sube un documento para autocompletar los datos del proveedor con IA.'}
+            {step === 'service_check' && 'Indica si este contrato corresponde a un servicio nuevo o reemplaza uno existente.'}
+            {step === 'form' && 'Revisa y completa la información del proveedor y servicio.'}
           </SheetDescription>
         </SheetHeader>
 
@@ -569,6 +606,59 @@ export function CreateSupplierSheet({
                 Completar manualmente
               </Button>
             </div>
+          </div>
+        )}
+        {!duplicateSupplier && status !== 'success' && step === 'service_check' && (
+          /* ── Service check step ── */
+          <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6 space-y-5">
+            <div className="rounded-xl border bg-card p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Servicio detectado
+              </p>
+              <p className="text-sm font-medium">
+                {fields.serviceCategory || 'Sin categoría'}
+              </p>
+              {fields.serviceDescription && (
+                <p className="text-xs text-muted-foreground">{fields.serviceDescription}</p>
+              )}
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Este proveedor ya tiene servicios registrados. ¿Este contrato reemplaza uno existente o es un servicio nuevo?
+            </p>
+
+            <div className="space-y-2">
+              {existingServices.map((svc) => (
+                <button
+                  key={svc.id}
+                  type="button"
+                  onClick={() => {
+                    setResolvedServiceId(svc.id);
+                    setStep('form');
+                  }}
+                  className="w-full rounded-lg border px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                >
+                  <p className="text-sm font-medium">Reemplazar contrato de: {svc.serviceCategory}</p>
+                  {svc.serviceDescription && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{svc.serviceDescription}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setResolvedServiceId(null);
+                setStep('form');
+              }}
+              className="w-full rounded-lg border-2 border-dashed px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+            >
+              <p className="text-sm font-medium text-primary">+ Crear nuevo servicio</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Se agregará como un servicio adicional de este proveedor
+              </p>
+            </button>
           </div>
         )}
         {!duplicateSupplier && status !== 'success' && step === 'form' && (

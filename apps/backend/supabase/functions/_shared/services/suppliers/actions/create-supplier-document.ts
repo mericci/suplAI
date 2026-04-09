@@ -17,8 +17,8 @@ export async function createSupplierDocument(data: unknown): Promise<SupplierDoc
     const isCostDoc = !!(validated.tariffType || (validated.amounts && validated.amounts.length > 0));
     const documentRole = isCostDoc ? 'cost_contract' : 'additional';
 
-    if (isCostDoc) {
-      await supplierDocumentDb.demoteCurrentDocuments(validated.supplierId);
+    if (isCostDoc && validated.serviceId) {
+      await supplierDocumentDb.demoteCurrentDocuments(validated.supplierId, validated.serviceId);
     }
 
     const doc = await supplierDocumentDb.create({
@@ -32,8 +32,9 @@ export async function createSupplierDocument(data: unknown): Promise<SupplierDoc
       tariff_type: validated.tariffType,
       tariff_detail: validated.tariffDetail,
       amounts: (validated.amounts ?? []) as SupplierDocumentAmount[],
+      service_id: validated.serviceId ?? null,
       document_role: documentRole,
-      is_current: isCostDoc,
+      is_current: isCostDoc && !!validated.serviceId,
     });
 
     logger.info('Supplier document created', { docId: doc.id });

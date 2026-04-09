@@ -16,6 +16,8 @@ import {
   getSupplierDocumentPreviewUrlHandler,
   getSupplierPaymentInfoHandler,
   upsertSupplierPaymentInfoHandler,
+  createSupplierServiceHandler,
+  listSupplierServicesHandler,
 } from './http/index.js';
 import { requireAuth } from '../../auth/middleware.js';
 
@@ -56,6 +58,15 @@ export function registerSupplierRoutes(router: Router): void {
   router.get(
     '/api/suppliers/:supplierId/documents/:docId/preview-url',
     requireAuth(async (req) => getSupplierDocumentPreviewUrlHandler(req)),
+  );
+  // Supplier services
+  router.get(
+    '/api/suppliers/:supplierId/services',
+    requireAuth(async (req) => listSupplierServicesHandler(req)),
+  );
+  router.post(
+    '/api/suppliers/:supplierId/services',
+    requireAuth(async (req) => createSupplierServiceHandler(req)),
   );
   // Supplier payment info
   router.get(

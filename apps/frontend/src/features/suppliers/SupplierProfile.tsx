@@ -22,8 +22,9 @@ import { Separator } from '@/components/ui/separator';
 import {
   getSupplier,
   listSupplierDocuments,
+  listSupplierServices,
 } from '@/integrations/backend/suppliers';
-import type { Supplier, SupplierDocument } from '@/integrations/backend/suppliers';
+import type { Supplier, SupplierDocument, SupplierService } from '@/integrations/backend/suppliers';
 import { getMe } from '@/integrations/backend/users';
 import { getOrgInvoices } from '@/integrations/backend/sii/get-org-invoices';
 import {
@@ -261,6 +262,30 @@ function InvoicesSection({
   );
 }
 
+function ServiceContractSection({
+  service,
+  docs,
+  supplierId,
+}: {
+  service: SupplierService;
+  docs: SupplierDocument[];
+  supplierId: string;
+}): React.JSX.Element {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Badge variant="secondary" className="text-xs font-medium px-2 py-0.5">
+          {service.serviceCategory}
+        </Badge>
+        {service.serviceDescription && (
+          <span className="text-xs text-muted-foreground truncate">{service.serviceDescription}</span>
+        )}
+      </div>
+      <CostContractSection docs={docs} supplierId={supplierId} />
+    </div>
+  );
+}
+
 function CostContractSection({
   docs,
   supplierId,
@@ -471,6 +496,7 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
   const [invoicesLoading, setInvoicesLoading] = useState(true);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [services, setServices] = useState<SupplierService[]>([]);
 
   useEffect(() => {
     const fetchData = async (): Promise<void> => {
@@ -484,9 +510,12 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
         setOrgId(currentOrgId);
         setIsAdmin(meRes.success && meRes.data ? meRes.data.role === 'admin' : false);
 
-        const [supplierRes, docsRes, invoicesRes] = await Promise.all([
+        const [supplierRes, docsRes, servicesRes, invoicesRes] = await Promise.all([
           getSupplier(supplierId),
           listSupplierDocuments(supplierId),
+          currentOrgId
+            ? listSupplierServices(supplierId, currentOrgId)
+            : Promise.resolve(null),
           currentOrgId
             ? getOrgInvoices(currentOrgId, { supplierId, limit: 100 })
             : Promise.resolve(null),
@@ -499,6 +528,7 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
 
         setSupplier(supplierRes.data);
         setDocuments(docsRes.success ? (docsRes.data ?? []) : []);
+        setServices(servicesRes?.success ? (servicesRes.data ?? []) : []);
 
         if (invoicesRes?.success && invoicesRes.data) {
           setInvoices(invoicesRes.data.data);
@@ -611,6 +641,7 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
                 <CreateSupplierSheet
                   supplierId={supplierId}
                   supplier={supplier}
+                  orgId={orgId ?? undefined}
                   onSuccess={handleDocumentAdded}
                   trigger={
                     <Button size="sm">
@@ -636,14 +667,35 @@ export function SupplierProfile({ supplierId }: SupplierProfileProps): React.JSX
                   {(() => {
                     const costDocs = documents.filter((d) => d.documentRole === 'cost_contract');
                     const additionalDocs = documents.filter((d) => d.documentRole === 'additional');
+                    const legacyDocs = costDocs.filter((d) => !d.serviceId);
+                    const hasCostContent = services.length > 0 || legacyDocs.length > 0;
                     return (
                       <>
-                        {costDocs.length > 0 && (
-                          <CostContractSection docs={costDocs} supplierId={supplierId} />
+                        {/* Service-grouped cost contracts */}
+                        {services.map((svc, idx) => {
+                          const svcDocs = costDocs.filter((d) => d.serviceId === svc.id);
+                          if (svcDocs.length === 0) return null;
+                          return (
+                            <div key={svc.id}>
+                              {idx > 0 && <Separator className="mb-8" />}
+                              <ServiceContractSection
+                                service={svc}
+                                docs={svcDocs}
+                                supplierId={supplierId}
+                              />
+                            </div>
+                          );
+                        })}
+                        {/* Legacy cost contracts without a service */}
+                        {legacyDocs.length > 0 && (
+                          <>
+                            {services.length > 0 && <Separator />}
+                            <CostContractSection docs={legacyDocs} supplierId={supplierId} />
+                          </>
                         )}
                         {additionalDocs.length > 0 && (
                           <>
-                            {costDocs.length > 0 && <Separator />}
+                            {hasCostContent && <Separator />}
                             <AdditionalDocsSection docs={additionalDocs} supplierId={supplierId} />
                           </>
                         )}
