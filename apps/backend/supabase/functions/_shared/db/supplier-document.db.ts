@@ -17,6 +17,7 @@ export interface SupplierDocumentRow {
   tariff_type: string | null;
   tariff_detail: string | null;
   amounts: SupplierDocumentAmount[];
+  service_id: string | null;
   document_role: 'cost_contract' | 'additional';
   is_current: boolean;
   created_at: string;
@@ -35,6 +36,7 @@ export interface CreateSupplierDocumentData {
   tariff_type?: string | null;
   tariff_detail?: string | null;
   amounts?: SupplierDocumentAmount[];
+  service_id?: string | null;
   document_role?: 'cost_contract' | 'additional';
   is_current?: boolean;
 }
@@ -53,6 +55,7 @@ export async function create(data: CreateSupplierDocumentData): Promise<Supplier
       tariff_type: data.tariff_type ?? null,
       tariff_detail: data.tariff_detail ?? null,
       amounts: data.amounts ?? [],
+      service_id: data.service_id ?? null,
       document_role: data.document_role ?? 'cost_contract',
       is_current: data.is_current ?? false,
     })
@@ -63,11 +66,12 @@ export async function create(data: CreateSupplierDocumentData): Promise<Supplier
   return doc as SupplierDocumentRow;
 }
 
-export async function demoteCurrentDocuments(supplierId: string): Promise<void> {
+export async function demoteCurrentDocuments(supplierId: string, serviceId: string): Promise<void> {
   const { error } = await (supabase as any)
     .from('supplier_documents')
     .update({ is_current: false })
     .eq('supplier_id', supplierId)
+    .eq('service_id', serviceId)
     .eq('document_role', 'cost_contract')
     .is('deleted_at', null);
 
