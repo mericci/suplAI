@@ -4,5 +4,6 @@ export type { User, UserProfile, CreateUserPayload, UpdateUserPayload } from './
 export type { Supplier, SupplierPaymentInfo } from './types/supplier';
 export type { Invoice } from './types/invoice';
 export type { SupplierDocument, SupplierDocumentAmount, ExtractedDocumentData } from './types/supplier-document';
+export type { SupplierService } from './types/supplier-service';
 export type { NominaStatus, Nomina, NominaWithInvoiceIds } from './types/nomina';
 export type { OrganizationRule, UpsertOrganizationRulePayload, MeritoAction, MeritoCompletedAction, AiApproveAction } from './types/organization-rule';
