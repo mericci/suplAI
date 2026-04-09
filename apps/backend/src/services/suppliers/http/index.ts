@@ -10,3 +10,5 @@ export { listSupplierDocumentsHandler } from './list-supplier-documents.js';
 export { getSupplierDocumentPreviewUrlHandler } from './get-supplier-document-preview-url.js';
 export { getSupplierPaymentInfoHandler } from './get-supplier-payment-info.js';
 export { upsertSupplierPaymentInfoHandler } from './upsert-supplier-payment-info.js';
+export { createSupplierServiceHandler } from './create-supplier-service.js';
+export { listSupplierServicesHandler } from './list-supplier-services.js';

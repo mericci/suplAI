@@ -18,6 +18,7 @@ export const CreateSupplierDocumentSchema = z.object({
   tariffType: z.string().nullable().optional(),
   tariffDetail: z.string().nullable().optional(),
   amounts: z.array(SupplierDocumentAmountSchema).optional(),
+  serviceId: z.string().uuid().nullable().optional(),
   documentRole: z.enum(['cost_contract', 'additional']).optional(),
   isCurrent: z.boolean().optional(),
 });

@@ -2,9 +2,10 @@
  * Supplier Service Types
  */
 
-import type { SupplierDocument } from '@supl/shared';
+import type { SupplierDocument, SupplierService } from '@supl/shared';
 import type { Database } from '../../../types/supabase.js';
 import type { SupplierDocumentRow } from '../../../db/supplier-document.db.js';
+import type { SupplierServiceRow } from '../../../db/supplier-service.db.js';
 
 type SupplierRow = Database['public']['Tables']['suppliers']['Row'];
 
@@ -54,6 +55,20 @@ export function toPublic(supplier: SupplierInput): SupplierPublic {
   };
 }
 
+export function toPublicService(row: SupplierServiceRow): SupplierService {
+  return {
+    id: row.id,
+    supplierId: row.supplier_id,
+    organizationId: row.organization_id,
+    serviceCategory: row.service_category,
+    serviceDescription: row.service_description,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  };
+}
+
 export function toPublicDocument(doc: SupplierDocumentRow): SupplierDocument {
   return {
     id: doc.id,
@@ -67,6 +82,7 @@ export function toPublicDocument(doc: SupplierDocumentRow): SupplierDocument {
     tariffType: doc.tariff_type,
     tariffDetail: doc.tariff_detail,
     amounts: doc.amounts,
+    serviceId: doc.service_id,
     documentRole: doc.document_role,
     isCurrent: doc.is_current,
     createdAt: doc.created_at,

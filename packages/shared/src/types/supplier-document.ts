@@ -17,6 +17,7 @@ export interface SupplierDocument {
   tariffType: string | null;
   tariffDetail: string | null;
   amounts: SupplierDocumentAmount[];
+  serviceId: string | null;
   documentRole: 'cost_contract' | 'additional';
   isCurrent: boolean;
   createdAt: string;

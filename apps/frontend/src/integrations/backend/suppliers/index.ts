@@ -16,3 +16,7 @@ export { getSupplierPaymentInfo } from './get-supplier-payment-info';
 export { upsertSupplierPaymentInfo } from './upsert-supplier-payment-info';
 export type { UpsertSupplierPaymentInfoPayload } from './upsert-supplier-payment-info';
 export type { SupplierPaymentInfo } from '@supl/shared';
+export { listSupplierServices } from './list-supplier-services';
+export { createSupplierService } from './create-supplier-service';
+export type { CreateSupplierServicePayload } from './create-supplier-service';
+export type { SupplierService } from '@supl/shared';

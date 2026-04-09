@@ -10,3 +10,5 @@ export { listSupplierDocuments } from './list-supplier-documents.ts';
 export { getSupplierDocumentPreviewUrl } from './get-supplier-document-preview-url.ts';
 export { getSupplierPaymentInfo } from './get-supplier-payment-info.ts';
 export { upsertSupplierPaymentInfo } from './upsert-supplier-payment-info.ts';
+export { createSupplierService } from './create-supplier-service.ts';
+export { listSupplierServices } from './list-supplier-services.ts';

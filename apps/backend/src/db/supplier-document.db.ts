@@ -24,6 +24,7 @@ export interface SupplierDocumentRow {
   tariff_type: string | null;
   tariff_detail: string | null;
   amounts: SupplierDocumentAmount[];
+  service_id: string | null;
   document_role: 'cost_contract' | 'additional';
   is_current: boolean;
   created_at: string;
@@ -42,6 +43,7 @@ export interface CreateSupplierDocumentData {
   tariff_type?: string | null;
   tariff_detail?: string | null;
   amounts?: SupplierDocumentAmount[];
+  service_id?: string | null;
   document_role?: 'cost_contract' | 'additional';
   is_current?: boolean;
 }
@@ -63,6 +65,7 @@ export async function create(data: CreateSupplierDocumentData): Promise<Supplier
       tariff_type: data.tariff_type ?? null,
       tariff_detail: data.tariff_detail ?? null,
       amounts: data.amounts ?? [],
+      service_id: data.service_id ?? null,
       document_role: data.document_role ?? 'cost_contract',
       is_current: data.is_current ?? false,
     })
@@ -74,13 +77,15 @@ export async function create(data: CreateSupplierDocumentData): Promise<Supplier
 }
 
 /**
- * Demote all current cost_contract documents for a supplier (set is_current = false).
+ * Demote all current cost_contract documents for a specific service (set is_current = false).
+ * Scoped by serviceId so that other services for the same supplier are unaffected.
  */
-export async function demoteCurrentDocuments(supplierId: string): Promise<void> {
+export async function demoteCurrentDocuments(supplierId: string, serviceId: string): Promise<void> {
   const { error } = await db
     .from('supplier_documents')
     .update({ is_current: false })
     .eq('supplier_id', supplierId)
+    .eq('service_id', serviceId)
     .eq('document_role', 'cost_contract')
     .is('deleted_at', null);
 
