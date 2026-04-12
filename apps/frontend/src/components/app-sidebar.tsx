@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import {
   ClockIcon,
   CheckCircleIcon,
@@ -30,26 +29,47 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { getMe } from '@/integrations/backend/users';
+import { useUserProfile } from '@/context/UserProfileContext';
 import type { UserProfile } from '@/integrations/backend/users';
 
-const navItems = [
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Administrador',
+  super_admin: 'Super Admin',
+  aprobador: 'Aprobador',
+  standard: 'Estándar',
+  rendidor: 'Rendidor',
+};
+
+const invoiceItems = [
   { label: 'Pendientes', href: '/pending-invoices', icon: ClockIcon },
   { label: 'Aprobadas', href: '/approved-invoices', icon: ThumbsUpIcon },
   { label: 'Rechazadas', href: '/rejected-invoices', icon: XCircleIcon },
   { label: 'Ya pagado', href: '/paid-invoices', icon: CheckCircleIcon },
-  { label: 'Proveedores', href: '/providers', icon: UsersIcon },
-  { label: 'Equipo', href: '/team', icon: Users2Icon },
-  { label: 'Presupuesto', href: '/budget', icon: WalletIcon },
-  { label: 'Contabilidad', href: '/accounting', icon: BookOpenIcon },
-  { label: 'Estadísticas', href: '/statistics', icon: BarChart3Icon },
 ];
 
-const adminNavItems = [
+const providerItem = { label: 'Proveedores', href: '/providers', icon: UsersIcon };
+const accountingItem = { label: 'Contabilidad', href: '/accounting', icon: BookOpenIcon };
+
+const adminOnlyItems = [
+  { label: 'Equipo', href: '/team', icon: Users2Icon },
+  { label: 'Presupuesto', href: '/budget', icon: WalletIcon },
+  { label: 'Estadísticas', href: '/statistics', icon: BarChart3Icon },
   { label: 'Configuración', href: '/settings', icon: SettingsIcon },
 ];
 
-const ADMIN_ROLES = ['admin', 'super_admin'];
+function getNavItems(role: string): Array<{ label: string; href: string; icon: React.ComponentType<{ className?: string }> }> {
+  if (role === 'admin' || role === 'super_admin') {
+    return [...invoiceItems, providerItem, accountingItem, ...adminOnlyItems];
+  }
+  if (role === 'aprobador') {
+    return [...invoiceItems, providerItem];
+  }
+  if (role === 'standard') {
+    return [...invoiceItems, providerItem, accountingItem];
+  }
+  // rendidor: no items (DashboardContent shows empty state)
+  return [];
+}
 
 function getInitials(profile: UserProfile | null): string {
   if (!profile) return '?';
@@ -67,17 +87,10 @@ function getDisplayName(profile: UserProfile | null): string {
 export function AppSidebar(): React.JSX.Element {
   const pathname = usePathname();
   const { signOut } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { profile } = useUserProfile();
 
-  useEffect(() => {
-    getMe().then((res) => {
-      if (res.success && res.data) {
-        setProfile(res.data);
-      }
-    }).catch(() => {
-      // silently ignore — sidebar still renders without profile
-    });
-  }, []);
+  const role = profile?.role ?? '';
+  const navItems = getNavItems(role);
 
   async function handleSignOut(): Promise<void> {
     await signOut();
@@ -101,7 +114,7 @@ export function AppSidebar(): React.JSX.Element {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {[...navItems, ...(ADMIN_ROLES.includes(profile?.role ?? '') ? adminNavItems : [])].map((item) => {
+              {navItems.map((item) => {
                 const isActive = item.href === '/accounting'
                   ? pathname.startsWith('/accounting')
                   : pathname === item.href;
@@ -137,8 +150,8 @@ export function AppSidebar(): React.JSX.Element {
             <span className="text-sm font-medium leading-none truncate">
               {getDisplayName(profile)}
             </span>
-            <span className="text-xs text-muted-foreground capitalize">
-              {profile?.role ?? ''}
+            <span className="text-xs text-muted-foreground">
+              {ROLE_LABELS[profile?.role ?? ''] ?? (profile?.role ?? '')}
             </span>
           </div>
           <button

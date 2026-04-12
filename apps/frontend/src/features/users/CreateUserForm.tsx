@@ -12,7 +12,7 @@ interface FormFields {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'standard' | 'admin' | 'moderator';
+  role: 'standard' | 'admin' | 'aprobador' | 'rendidor';
   password: string;
 }
 
@@ -30,7 +30,8 @@ interface CreateUserFormProps {
 const ROLE_OPTIONS: { value: FormFields['role']; label: string }[] = [
   { value: 'standard', label: 'Estándar' },
   { value: 'admin', label: 'Administrador' },
-  { value: 'moderator', label: 'Moderador' },
+  { value: 'aprobador', label: 'Aprobador' },
+  { value: 'rendidor', label: 'Rendidor' },
 ];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

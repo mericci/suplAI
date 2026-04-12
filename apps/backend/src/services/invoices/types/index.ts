@@ -14,6 +14,7 @@ export interface InvoicePublic {
   id: string;
   organizationId: string;
   supplierId: string;
+  serviceId: string | null;
   externalUniqueKey: string;
   issuerTaxIdentifier: string;
   receiverTaxIdentifier: string;
@@ -43,6 +44,7 @@ export function toPublic(invoice: InvoiceRow): InvoicePublic {
     id: invoice.id,
     organizationId: invoice.organization_id,
     supplierId: invoice.supplier_id,
+    serviceId: (invoice as unknown as Record<string, unknown>).service_id as string | null ?? null,
     externalUniqueKey: invoice.external_unique_key,
     issuerTaxIdentifier: invoice.issuer_tax_identifier,
     receiverTaxIdentifier: invoice.receiver_tax_identifier,

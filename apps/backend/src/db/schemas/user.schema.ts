@@ -17,8 +17,9 @@ export type UserStatus = z.infer<typeof UserStatusEnum>;
 
 export const UserRoleEnum = z.enum([
   'admin',
+  'aprobador',
   'standard',
-  'moderator',
+  'rendidor',
   'super_admin',
 ]);
 export type UserRole = z.infer<typeof UserRoleEnum>;

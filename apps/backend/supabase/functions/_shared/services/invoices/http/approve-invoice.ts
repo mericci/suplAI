@@ -1,11 +1,17 @@
 /**
  * HTTP handler: PATCH /api/organizations/:orgId/invoices/:id/approve
  *
- * Requires authentication. The approving user ID is taken from the auth context.
+ * Requires authentication. Role-gated:
+ * - admin / super_admin: can approve any invoice
+ * - aprobador: can approve only if invoice.service_id → service.cost_center_id ∈ user's cost centers
+ * - other roles: 403 Forbidden
  */
 
 import { approveInvoice } from '../handlers/index.ts';
 import * as userDb from '../../../db/user.db.ts';
+import * as invoiceDb from '../../../db/invoice.db.ts';
+import * as supplierServiceDb from '../../../db/supplier-service.db.ts';
+import * as costCenterDb from '../../../db/cost-center.db.ts';
 import {
   successResponse,
   notFoundResponse,
@@ -18,6 +24,8 @@ import { getErrorMessage } from '../../../utils/error.ts';
 import { isValidUUID } from '../../../utils/validation.ts';
 import type { RequestContext } from '../../../types/api.ts';
 import { HttpStatus } from '../../../types/api.ts';
+
+const APPROVE_ROLES = ['admin', 'super_admin', 'aprobador'];
 
 export async function approveInvoiceHandler(
   req: Request,
@@ -37,6 +45,39 @@ export async function approveInvoiceHandler(
 
     const user = await userDb.findByEmail(context.email);
     if (!user) return unauthorizedResponse();
+
+    if (!APPROVE_ROLES.includes(user.role)) {
+      return errorResponse('Forbidden: you do not have permission to approve invoices', HttpStatus.FORBIDDEN);
+    }
+
+    if (user.role === 'aprobador') {
+      const invoiceRow = await invoiceDb.findById(id, orgId);
+      if (!invoiceRow) return notFoundResponse('Invoice');
+
+      const serviceId = (invoiceRow as unknown as Record<string, unknown>).service_id as string | null;
+      if (!serviceId) {
+        return errorResponse(
+          'Invoice must be linked to a service before an approver can approve it',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      const service = await supplierServiceDb.findById(serviceId);
+      if (!service?.cost_center_id) {
+        return errorResponse(
+          'Service must be linked to a cost center before an approver can approve it',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      const userCostCenterIds = await costCenterDb.findCostCenterIdsByUser(user.id);
+      if (!userCostCenterIds.includes(service.cost_center_id)) {
+        return errorResponse(
+          "Forbidden: this invoice's service is not linked to your cost center",
+          HttpStatus.FORBIDDEN,
+        );
+      }
+    }
 
     const invoice = await approveInvoice(id, orgId, user.id);
     return successResponse(invoice, 'Invoice approved');
