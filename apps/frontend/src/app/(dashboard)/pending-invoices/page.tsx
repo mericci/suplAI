@@ -16,6 +16,7 @@ import {
   InfoIcon,
   LoaderCircleIcon,
   AlertTriangleIcon,
+  ClockIcon,
 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -52,6 +53,7 @@ import {
 import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
 import { getMe } from '@/integrations/backend/users';
+import { useUserProfile } from '@/context/UserProfileContext';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
 import { getOrganization } from '@/integrations/backend/organizations';
@@ -315,6 +317,7 @@ function BudgetStatusCell({ invoiceId, budgetStatuses }: BudgetStatusCellProps):
 
 export default function PendingInvoicesPage(): React.JSX.Element {
   const router = useRouter();
+  const { canApprove } = useUserProfile();
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -330,6 +333,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(cachedLastSyncAt);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [aiLoadingId, setAiLoadingId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [budgetStatuses, setBudgetStatuses] = useState<Record<string, InvoiceBudgetStatus>>({});
@@ -554,13 +558,25 @@ export default function PendingInvoicesPage(): React.JSX.Element {
     await doSync(orgId, true);
   };
 
+  const showActionError = (msg: string): void => {
+    setActionError(msg);
+    setTimeout(() => setActionError(null), 5000);
+  };
+
   const handleApprove = async (inv: EnrichedInvoice): Promise<void> => {
     const orgId = await getOrgId();
     if (!orgId) return;
     setActionLoading(inv.id);
+    setActionError(null);
     try {
-      await approveInvoice(orgId, inv.id);
+      const result = await approveInvoice(orgId, inv.id);
+      if (!result.success) {
+        showActionError(result.error ?? 'Error al aprobar la factura');
+        return;
+      }
       setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, status: 'approved' } : i));
+    } catch {
+      showActionError('Error al aprobar la factura');
     } finally {
       setActionLoading(null);
     }
@@ -570,9 +586,16 @@ export default function PendingInvoicesPage(): React.JSX.Element {
     const orgId = await getOrgId();
     if (!orgId) return;
     setActionLoading(inv.id);
+    setActionError(null);
     try {
-      await rejectInvoice(orgId, inv.id);
+      const result = await rejectInvoice(orgId, inv.id);
+      if (!result.success) {
+        showActionError(result.error ?? 'Error al rechazar la factura');
+        return;
+      }
       setInvoices((prev) => prev.map((i) => i.id === inv.id ? { ...i, status: 'rejected' } : i));
+    } catch {
+      showActionError('Error al rechazar la factura');
     } finally {
       setActionLoading(null);
     }
@@ -651,6 +674,24 @@ export default function PendingInvoicesPage(): React.JSX.Element {
         </div>
       </div>
 
+      {/* Action error banner */}
+      {actionError && (
+        <div className="flex items-center justify-between gap-3 border-b bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          <div className="flex items-center gap-2">
+            <AlertTriangleIcon className="h-4 w-4 shrink-0" />
+            <span>{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 rounded p-0.5 hover:bg-destructive/20 transition-colors"
+            aria-label="Cerrar"
+          >
+            <XIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -662,19 +703,37 @@ export default function PendingInvoicesPage(): React.JSX.Element {
             className="pl-9"
           />
         </div>
-        <Button
-          variant="outline"
-          className="shrink-0 gap-2"
-          onClick={() => setShowFilters((v) => !v)}
-        >
-          <FilterIcon className="h-4 w-4" />
-          Filtrar
-          {activeFilterCount > 0 && (
-            <Badge className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-              {activeFilterCount}
-            </Badge>
+        <div className="flex shrink-0 items-center gap-2">
+          {canApprove && (
+            <Button
+              variant={appliedFilters.status === 'pending' && appliedFilters.supplierId === 'all' && appliedFilters.amountValue === '' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                const pendingOnly = { ...DEFAULT_FILTERS, status: 'pending' };
+                setFilters(pendingOnly);
+                setAppliedFilters(pendingOnly);
+                setCurrentPage(1);
+              }}
+              className="gap-1.5"
+            >
+              <ClockIcon className="h-3.5 w-3.5" />
+              Por revisar
+            </Button>
           )}
-        </Button>
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => setShowFilters((v) => !v)}
+          >
+            <FilterIcon className="h-4 w-4" />
+            Filtrar
+            {activeFilterCount > 0 && (
+              <Badge className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Filter panel */}
@@ -905,39 +964,41 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                           {statusLabel(inv.status)}
                         </Badge>
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              aria-label={`Acciones para factura ${inv.documentNumber}`}
-                              disabled={actionLoading === inv.id}
-                            >
-                              <MoreHorizontalIcon className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {inv.status === 'pending' && (
-                              <>
-                                <DropdownMenuItem onClick={() => handleApprove(inv)}>
-                                  Aprobar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleReject(inv)}>
-                                  Rechazar
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            <DropdownMenuItem
-                              onClick={() => handleValidateAi(inv)}
-                              disabled={actionLoading === inv.id || aiLoadingId === inv.id}
-                            >
-                              Re-validar con IA
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+                      {canApprove && (
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label={`Acciones para factura ${inv.documentNumber}`}
+                                disabled={actionLoading === inv.id}
+                              >
+                                <MoreHorizontalIcon className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {inv.status === 'pending' && (
+                                <>
+                                  <DropdownMenuItem onClick={() => handleApprove(inv)}>
+                                    Aprobar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleReject(inv)}>
+                                    Rechazar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => handleValidateAi(inv)}
+                                disabled={actionLoading === inv.id || aiLoadingId === inv.id}
+                              >
+                                Re-validar con IA
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                   {filtered.length === 0 && (
@@ -964,35 +1025,37 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         {inv.documentNumber}
                       </span>
                     </div>
-                    <div onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          aria-label={`Acciones para factura ${inv.documentNumber}`}
-                          disabled={actionLoading === inv.id}
-                        >
-                          <MoreHorizontalIcon className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {inv.status === 'pending' && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleApprove(inv)}>Aprobar</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleReject(inv)}>Rechazar</DropdownMenuItem>
-                          </>
-                        )}
-                        <DropdownMenuItem
-                          onClick={() => handleValidateAi(inv)}
-                          disabled={actionLoading === inv.id || aiLoadingId === inv.id}
-                        >
-                          Re-validar con IA
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    </div>
+                    {canApprove && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              aria-label={`Acciones para factura ${inv.documentNumber}`}
+                              disabled={actionLoading === inv.id}
+                            >
+                              <MoreHorizontalIcon className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {inv.status === 'pending' && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleApprove(inv)}>Aprobar</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleReject(inv)}>Rechazar</DropdownMenuItem>
+                              </>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() => handleValidateAi(inv)}
+                              disabled={actionLoading === inv.id || aiLoadingId === inv.id}
+                            >
+                              Re-validar con IA
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <Badge variant="outline" className="text-xs">{inv.documentType}</Badge>

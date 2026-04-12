@@ -48,22 +48,25 @@ import { getOrganization } from '@/integrations/backend/organizations';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador',
-  moderator: 'Moderador',
+  aprobador: 'Aprobador',
   standard: 'Estándar',
+  rendidor: 'Rendidor',
   super_admin: 'Super Admin',
 };
 
 const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
   admin: 'default',
   super_admin: 'default',
-  moderator: 'secondary',
+  aprobador: 'secondary',
   standard: 'outline',
+  rendidor: 'outline',
 };
 
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'standard', label: 'Estándar' },
-  { value: 'moderator', label: 'Moderador' },
+  { value: 'aprobador', label: 'Aprobador' },
   { value: 'admin', label: 'Administrador' },
+  { value: 'rendidor', label: 'Rendidor' },
 ];
 
 function getInitials(user: User): string {

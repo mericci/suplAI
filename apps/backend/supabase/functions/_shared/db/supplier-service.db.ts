@@ -10,6 +10,7 @@ export interface SupplierServiceRow {
   organization_id: string;
   service_category: string;
   service_description: string | null;
+  cost_center_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -21,6 +22,7 @@ export interface CreateSupplierServiceData {
   organization_id: string;
   service_category: string;
   service_description?: string | null;
+  cost_center_id?: string | null;
 }
 
 export async function create(data: CreateSupplierServiceData): Promise<SupplierServiceRow> {
@@ -31,6 +33,7 @@ export async function create(data: CreateSupplierServiceData): Promise<SupplierS
       organization_id: data.organization_id,
       service_category: data.service_category,
       service_description: data.service_description ?? null,
+      cost_center_id: data.cost_center_id ?? null,
     })
     .select()
     .single();

@@ -65,6 +65,7 @@ export function toPublicService(row: SupplierServiceRow): SupplierService {
     organizationId: row.organization_id,
     serviceCategory: row.service_category,
     serviceDescription: row.service_description,
+    costCenterId: row.cost_center_id ?? null,
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

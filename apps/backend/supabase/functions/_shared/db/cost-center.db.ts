@@ -101,6 +101,16 @@ export async function softDeleteById(
   if (error) throw new Error(`Database error: ${error.message}`);
 }
 
+export async function findCostCenterIdsByUser(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('cost_center_users' as never)
+    .select('cost_center_id')
+    .eq('user_id', userId);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return ((data ?? []) as Array<{ cost_center_id: string }>).map((row) => row.cost_center_id);
+}
+
 export async function findUsersForCostCenter(
   costCenterId: string,
 ): Promise<Array<{ userId: string; email: string; firstName: string | null; lastName: string | null }>> {
