@@ -90,6 +90,27 @@ export async function findById(id: string): Promise<SupplierServiceRow | null> {
 }
 
 /**
+ * Fetch cost_center_id for a set of service IDs. Returns a map of serviceId → costCenterId.
+ */
+export async function findCostCentersByServiceIds(
+  serviceIds: string[],
+): Promise<Map<string, string | null>> {
+  if (serviceIds.length === 0) return new Map();
+  const { data, error } = await db
+    .from('supplier_services')
+    .select('id, cost_center_id')
+    .in('id', serviceIds)
+    .is('deleted_at', null);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  const map = new Map<string, string | null>();
+  for (const row of (data ?? []) as Array<{ id: string; cost_center_id: string | null }>) {
+    map.set(row.id, row.cost_center_id);
+  }
+  return map;
+}
+
+/**
  * Soft-delete a supplier service by ID.
  */
 export async function softDelete(id: string): Promise<void> {

@@ -15,6 +15,7 @@ export interface InvoicePublic {
   organizationId: string;
   supplierId: string;
   serviceId: string | null;
+  serviceCostCenterId: string | null;
   externalUniqueKey: string;
   issuerTaxIdentifier: string;
   receiverTaxIdentifier: string;
@@ -39,12 +40,13 @@ export interface InvoicePublic {
   deletedAt: string | null;
 }
 
-export function toPublic(invoice: InvoiceRow): InvoicePublic {
+export function toPublic(invoice: InvoiceRow, serviceCostCenterId: string | null = null): InvoicePublic {
   return {
     id: invoice.id,
     organizationId: invoice.organization_id,
     supplierId: invoice.supplier_id,
     serviceId: (invoice as unknown as Record<string, unknown>).service_id as string | null ?? null,
+    serviceCostCenterId,
     externalUniqueKey: invoice.external_unique_key,
     issuerTaxIdentifier: invoice.issuer_tax_identifier,
     receiverTaxIdentifier: invoice.receiver_tax_identifier,

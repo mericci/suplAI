@@ -4,6 +4,7 @@
 
 import { logger } from '../../../utils/logger.ts';
 import * as invoiceDb from '../../../db/invoice.db.ts';
+import * as supplierServiceDb from '../../../db/supplier-service.db.ts';
 import { validateInvoiceListFilters } from '../../../db/schemas/index.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
 import { toPublic } from '../types/index.ts';
@@ -35,9 +36,22 @@ export async function listInvoices(
       },
     );
 
+    const serviceIds = [
+      ...new Set(
+        invoices
+          .map((inv) => (inv as unknown as Record<string, unknown>).service_id as string | null)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const serviceCostCenterMap = await supplierServiceDb.findCostCentersByServiceIds(serviceIds);
+
     return {
       success: true,
-      data: invoices.map(toPublic),
+      data: invoices.map((inv) => {
+        const serviceId = (inv as unknown as Record<string, unknown>).service_id as string | null;
+        const serviceCostCenterId = serviceId ? (serviceCostCenterMap.get(serviceId) ?? null) : null;
+        return toPublic(inv, serviceCostCenterId);
+      }),
       pagination: {
         page: filters.page,
         limit: filters.limit,

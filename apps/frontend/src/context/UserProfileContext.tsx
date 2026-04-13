@@ -12,6 +12,8 @@ interface UserProfileContextValue {
   isStandard: boolean;
   isRendidor: boolean;
   canApprove: boolean;
+  costCenterIds: string[];
+  canApproveInvoice: (inv: { serviceId: string | null; serviceCostCenterId: string | null }) => boolean;
 }
 
 const UserProfileContext = createContext<UserProfileContextValue>({
@@ -22,6 +24,8 @@ const UserProfileContext = createContext<UserProfileContextValue>({
   isStandard: false,
   isRendidor: false,
   canApprove: false,
+  costCenterIds: [],
+  canApproveInvoice: () => false,
 });
 
 export function UserProfileProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -38,14 +42,25 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const role = profile?.role ?? '';
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isAprobador = role === 'aprobador';
+  const costCenterIds = profile?.cost_center_ids ?? [];
+
   const value: UserProfileContextValue = {
     profile,
     loading,
-    isAdmin: role === 'admin' || role === 'super_admin',
-    isAprobador: role === 'aprobador',
+    isAdmin,
+    isAprobador,
     isStandard: role === 'standard',
     isRendidor: role === 'rendidor',
-    canApprove: role === 'admin' || role === 'super_admin' || role === 'aprobador',
+    canApprove: isAdmin || isAprobador,
+    costCenterIds,
+    canApproveInvoice: (inv) => {
+      if (isAdmin) return true;
+      if (!isAprobador) return false;
+      if (!inv.serviceId || !inv.serviceCostCenterId) return false;
+      return costCenterIds.includes(inv.serviceCostCenterId);
+    },
   };
 
   return (

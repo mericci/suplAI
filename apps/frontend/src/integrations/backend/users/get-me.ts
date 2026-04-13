@@ -8,6 +8,7 @@ export interface UserProfile {
   name: string | null;
   role: string;
   organization_id: string;
+  cost_center_ids: string[];
 }
 
 export async function getMe(): Promise<ApiResponse<UserProfile>> {

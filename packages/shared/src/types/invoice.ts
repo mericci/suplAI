@@ -3,6 +3,7 @@ export interface Invoice {
   organizationId: string;
   supplierId: string;
   serviceId: string | null;
+  serviceCostCenterId: string | null;
   issuerTaxIdentifier: string;
   receiverTaxIdentifier: string;
   documentType: string;
