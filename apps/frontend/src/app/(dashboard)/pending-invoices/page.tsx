@@ -669,7 +669,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
       {/* Summary card */}
       <div className="flex gap-4 border-b px-4 py-3">
         <div className="rounded-lg border bg-orange-50 px-4 py-2">
-          <p className="text-xs text-orange-700">Por revisar (pendientes)</p>
+          <p className="text-xs text-orange-700">Mis facturas (pendientes)</p>
           <p className="text-lg font-semibold text-orange-800">{formatCLP(totalPending)}</p>
         </div>
       </div>
@@ -717,7 +717,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
               className="gap-1.5"
             >
               <ClockIcon className="h-3.5 w-3.5" />
-              Por revisar
+              Mis facturas
             </Button>
           )}
           <Button
