@@ -2,6 +2,8 @@ export interface Invoice {
   id: string;
   organizationId: string;
   supplierId: string;
+  serviceId: string | null;
+  serviceCostCenterId: string | null;
   issuerTaxIdentifier: string;
   receiverTaxIdentifier: string;
   documentType: string;

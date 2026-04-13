@@ -10,6 +10,7 @@ import {
   serverError,
 } from '../../../utils/response.js';
 import { getErrorMessage } from '../../../utils/error.js';
+import { findCostCenterIdsByUser } from '../../../db/cost-center.db.js';
 import type { RequestContext } from '../../../types/api.js';
 
 export async function getMeHandler(
@@ -25,7 +26,9 @@ export async function getMeHandler(
 
     if (!user) return notFoundResponse('User');
 
-    return successResponse(user);
+    const costCenterIds = await findCostCenterIdsByUser(user.id);
+
+    return successResponse({ ...user, cost_center_ids: costCenterIds });
   } catch (error) {
     return serverError(getErrorMessage(error));
   }

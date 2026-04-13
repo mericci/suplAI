@@ -27,7 +27,7 @@ export interface CreateUserPayload {
   email: string;
   firstName?: string;
   lastName?: string;
-  role?: 'admin' | 'standard' | 'moderator' | 'super_admin';
+  role?: 'admin' | 'aprobador' | 'standard' | 'rendidor' | 'super_admin';
   status?: 'active' | 'inactive';
   password?: string;
 }

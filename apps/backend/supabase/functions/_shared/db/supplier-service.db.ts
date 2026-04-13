@@ -10,6 +10,7 @@ export interface SupplierServiceRow {
   organization_id: string;
   service_category: string;
   service_description: string | null;
+  cost_center_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -21,6 +22,7 @@ export interface CreateSupplierServiceData {
   organization_id: string;
   service_category: string;
   service_description?: string | null;
+  cost_center_id?: string | null;
 }
 
 export async function create(data: CreateSupplierServiceData): Promise<SupplierServiceRow> {
@@ -31,6 +33,7 @@ export async function create(data: CreateSupplierServiceData): Promise<SupplierS
       organization_id: data.organization_id,
       service_category: data.service_category,
       service_description: data.service_description ?? null,
+      cost_center_id: data.cost_center_id ?? null,
     })
     .select()
     .single();
@@ -68,6 +71,24 @@ export async function findById(id: string): Promise<SupplierServiceRow | null> {
     throw new Error(`Database error: ${error.message}`);
   }
   return data as SupplierServiceRow;
+}
+
+export async function findCostCentersByServiceIds(
+  serviceIds: string[],
+): Promise<Map<string, string | null>> {
+  if (serviceIds.length === 0) return new Map();
+  const { data, error } = await (supabase as any)
+    .from('supplier_services')
+    .select('id, cost_center_id')
+    .in('id', serviceIds)
+    .is('deleted_at', null);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  const map = new Map<string, string | null>();
+  for (const row of (data ?? []) as Array<{ id: string; cost_center_id: string | null }>) {
+    map.set(row.id, row.cost_center_id);
+  }
+  return map;
 }
 
 export async function softDelete(id: string): Promise<void> {
