@@ -382,7 +382,7 @@ export function NominaProfileSheet({
   /* ---- Computed --------------------------------------------------- */
 
   const overdueInvoices = invoiceDetails.filter(
-    (inv) => inv.executiveTitleDate && isOverdue(inv.executiveTitleDate),
+    (inv) => inv.dueDate && isOverdue(inv.dueDate),
   );
 
   const editTotal = [...editedInvoiceIds].reduce((sum, id) => {
@@ -514,7 +514,7 @@ export function NominaProfileSheet({
                         {overdueInvoices.length}
                         {overdueInvoices.length !== 1 ? ' facturas vencidas' : ' factura vencida'}
                       </strong>
-                      {' — el plazo de título ejecutivo ya pasó.'}
+                      {' — la fecha de vencimiento de pago ya pasó.'}
                     </span>
                   </div>
                 )}
@@ -531,13 +531,12 @@ export function NominaProfileSheet({
                           <TableRow>
                             <TableHead>Proveedor</TableHead>
                             <TableHead className="text-right">Monto</TableHead>
-                            <TableHead className="text-center hidden sm:table-cell">Título ej.</TableHead>
+                            <TableHead className="text-center hidden sm:table-cell">Vencimiento</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {invoiceDetails.map((inv) => {
-                            const overdue = inv.executiveTitleDate
-                              && isOverdue(inv.executiveTitleDate);
+                            const overdue = inv.dueDate && isOverdue(inv.dueDate);
                             return (
                               <TableRow key={inv.id} className={overdue ? 'bg-amber-50/50' : undefined}>
                                 <TableCell>
@@ -553,7 +552,7 @@ export function NominaProfileSheet({
                                 </TableCell>
                                 <TableCell className="text-center text-xs hidden sm:table-cell">
                                   <span className={cn(overdue && 'text-amber-600 font-medium')}>
-                                    {formatDate(inv.executiveTitleDate)}
+                                    {formatDate(inv.dueDate)}
                                   </span>
                                 </TableCell>
                               </TableRow>
