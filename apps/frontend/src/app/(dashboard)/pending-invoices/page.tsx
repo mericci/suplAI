@@ -317,7 +317,7 @@ function BudgetStatusCell({ invoiceId, budgetStatuses }: BudgetStatusCellProps):
 
 export default function PendingInvoicesPage(): React.JSX.Element {
   const router = useRouter();
-  const { canApprove } = useUserProfile();
+  const { canApprove, isAdmin, canApproveInvoice } = useUserProfile();
   const [invoices, setInvoices] = useState<EnrichedInvoice[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -964,7 +964,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                           {statusLabel(inv.status)}
                         </Badge>
                       </TableCell>
-                      {canApprove && (
+                      {canApproveInvoice(inv) && (
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -989,12 +989,14 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                                   </DropdownMenuItem>
                                 </>
                               )}
-                              <DropdownMenuItem
-                                onClick={() => handleValidateAi(inv)}
-                                disabled={actionLoading === inv.id || aiLoadingId === inv.id}
-                              >
-                                Re-validar con IA
-                              </DropdownMenuItem>
+                              {isAdmin && (
+                                <DropdownMenuItem
+                                  onClick={() => handleValidateAi(inv)}
+                                  disabled={actionLoading === inv.id || aiLoadingId === inv.id}
+                                >
+                                  Re-validar con IA
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -1025,7 +1027,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                         {inv.documentNumber}
                       </span>
                     </div>
-                    {canApprove && (
+                    {canApproveInvoice(inv) && (
                       <div onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -1046,12 +1048,14 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                                 <DropdownMenuItem onClick={() => handleReject(inv)}>Rechazar</DropdownMenuItem>
                               </>
                             )}
-                            <DropdownMenuItem
-                              onClick={() => handleValidateAi(inv)}
-                              disabled={actionLoading === inv.id || aiLoadingId === inv.id}
-                            >
-                              Re-validar con IA
-                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <DropdownMenuItem
+                                onClick={() => handleValidateAi(inv)}
+                                disabled={actionLoading === inv.id || aiLoadingId === inv.id}
+                              >
+                                Re-validar con IA
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
