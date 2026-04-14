@@ -124,3 +124,52 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Landing page design tokens — scoped, does not affect dashboard */
+.landing {
+  --lp-bg-base:    #f2f1ee;
+  --lp-bg-surface: #e9e8e4;
+  --lp-bg-raised:  #e0deda;
+  --lp-border:     rgba(0,0,0,0.08);
+  --lp-text-primary:   #0f0f0f;
+  --lp-text-secondary: rgba(0,0,0,0.55);
+  --lp-text-muted:     rgba(0,0,0,0.35);
+  --lp-accent:         #0f0f0f;
+  --lp-accent-text:    #ffffff;
+}
+
+/* ── Scroll-triggered entrance animations ── */
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-on-scroll.from-left  { transform: translateX(-20px); }
+.animate-on-scroll.from-right { transform: translateX(20px); }
+.animate-on-scroll.is-visible {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+/* ── Hero entrance — plays on load, above the fold ── */
+@keyframes lp-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-fade {
+  opacity: 0;
+  animation: lp-fade-up 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-on-scroll {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .hero-fade {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+}
