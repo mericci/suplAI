@@ -30,8 +30,9 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname === '/login';
+  const isLandingPage = pathname === '/';
   const isPublicRoute =
-    isLoginPage || pathname.startsWith('/organizations/register');
+    isLoginPage || isLandingPage || pathname.startsWith('/organizations/register');
 
   if (!user && !isPublicRoute) {
     const loginUrl = request.nextUrl.clone();
@@ -39,10 +40,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Authenticated users visiting the landing page go to the dashboard
+  if (user && isLandingPage) {
+    const dashUrl = request.nextUrl.clone();
+    dashUrl.pathname = '/pending-invoices';
+    return NextResponse.redirect(dashUrl);
+  }
+
+  // Authenticated users on login go to the dashboard
   if (user && isLoginPage) {
-    const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = '/';
-    return NextResponse.redirect(homeUrl);
+    const dashUrl = request.nextUrl.clone();
+    dashUrl.pathname = '/pending-invoices';
+    return NextResponse.redirect(dashUrl);
   }
 
   return supabaseResponse;
