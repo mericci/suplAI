@@ -5,7 +5,9 @@
  * No soft delete — distributions are immutable once created.
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
+
+const supabase = supabaseAdmin();
 
 export interface InvoiceCostCenterDistributionRow {
   id: string;

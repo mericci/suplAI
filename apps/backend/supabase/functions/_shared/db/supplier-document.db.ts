@@ -2,8 +2,10 @@
  * Supplier Document Database Queries (Edge Function)
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
 import type { SupplierDocumentAmount } from '../types/supplier-document.ts';
+
+const supabase = supabaseAdmin();
 
 export interface SupplierDocumentRow {
   id: string;

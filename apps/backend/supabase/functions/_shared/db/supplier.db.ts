@@ -6,13 +6,15 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase, supabaseAdmin } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
 import type { Database } from '../types/supabase.ts';
 import { normalizeRut, formatRut } from '../utils/rut.ts';
 
 type Supplier = Database['public']['Tables']['suppliers']['Row'];
 type CreateSupplierInput = Database['public']['Tables']['suppliers']['Insert'];
 type UpdateSupplierInput = Database['public']['Tables']['suppliers']['Update'];
+
+const supabase = supabaseAdmin();
 
 export type SupplierWithAmounts = Supplier & {
   pendingAmount: number;

@@ -6,12 +6,14 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { Database } from '../types/supabase.js';
 
 type NominaRow = Database['public']['Tables']['nominas']['Row'];
 type NominaInsert = Database['public']['Tables']['nominas']['Insert'];
 type NominaUpdate = Database['public']['Tables']['nominas']['Update'];
+
+const supabase = supabaseAdmin();
 
 export type { NominaRow, NominaInsert, NominaUpdate };
 

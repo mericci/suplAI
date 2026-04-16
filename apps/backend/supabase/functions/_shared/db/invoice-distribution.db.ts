@@ -2,7 +2,9 @@
  * Invoice Distribution Database Queries (Edge Function)
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
+
+const supabase = supabaseAdmin();
 
 export interface CreateCostCenterDistribution {
   invoice_id: string;

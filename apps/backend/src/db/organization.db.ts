@@ -7,12 +7,14 @@
  * stripped before returning to API consumers (done in the action layer).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { Database } from '../types/supabase.js';
 
 type Organization = Database['public']['Tables']['organizations']['Row'];
 type CreateOrgInput = Database['public']['Tables']['organizations']['Insert'];
 type UpdateOrgInput = Database['public']['Tables']['organizations']['Update'];
+
+const supabase = supabaseAdmin();
 
 /**
  * Find an active organization by ID.
