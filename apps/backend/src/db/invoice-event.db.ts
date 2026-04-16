@@ -4,11 +4,13 @@
  * Audit trail for invoice lifecycle transitions.
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { Database } from '../types/supabase.js';
 
 type EventRow = Database['public']['Tables']['invoice_events']['Row'];
 type EventInsert = Database['public']['Tables']['invoice_events']['Insert'];
+
+const supabase = supabaseAdmin();
 
 export type { EventRow as InvoiceEventRow };
 

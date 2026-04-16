@@ -5,11 +5,11 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 
 // supplier_services is not yet in the Supabase-generated Database type.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as any;
+const db = supabaseAdmin() as any;
 
 export interface SupplierServiceRow {
   id: string;

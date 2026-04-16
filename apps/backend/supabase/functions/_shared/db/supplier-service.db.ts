@@ -2,7 +2,9 @@
  * Supplier Service Database Queries (Edge Function)
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
+
+const supabase = supabaseAdmin();
 
 export interface SupplierServiceRow {
   id: string;

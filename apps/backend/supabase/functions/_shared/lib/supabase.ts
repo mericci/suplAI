@@ -31,16 +31,21 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
 /**
  * Supabase client with service role (admin privileges)
  * Use with caution - bypasses RLS policies
+ * Lazy singleton: created once on first call and reused.
  */
+let _adminClient: ReturnType<typeof createClient<Database>> | null = null;
 export const supabaseAdmin = (): ReturnType<typeof createClient<Database>> => {
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!serviceRoleKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for admin client');
+  if (!_adminClient) {
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!serviceRoleKey) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for admin client');
+    }
+    _adminClient = createClient<Database>(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
   }
-  return createClient<Database>(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  return _adminClient;
 };

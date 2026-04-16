@@ -2,7 +2,9 @@
  * Supplier Cost Center Database Queries (Edge Function)
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
+
+const supabase = supabaseAdmin();
 
 export type DistributionType = 'single' | 'average' | 'percentage' | 'manual';
 
