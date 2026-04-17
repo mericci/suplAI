@@ -6,8 +6,10 @@
  * Uses soft delete pattern (deleted_at IS NULL).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { DistributionType } from './supplier-cost-center.db.js';
+
+const supabase = supabaseAdmin();
 
 export type { DistributionType };
 

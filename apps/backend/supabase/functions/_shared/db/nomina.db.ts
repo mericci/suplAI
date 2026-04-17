@@ -2,12 +2,14 @@
  * Nomina Database Queries (Edge Function)
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
 import type { Database } from '../types/supabase.ts';
 
 type NominaRow = Database['public']['Tables']['nominas']['Row'];
 type NominaInsert = Database['public']['Tables']['nominas']['Insert'];
 type NominaUpdate = Database['public']['Tables']['nominas']['Update'];
+
+const supabase = supabaseAdmin();
 
 export type { NominaRow, NominaInsert, NominaUpdate };
 

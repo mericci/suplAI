@@ -2,8 +2,10 @@
  * Supplier Accounting ID Database Queries (Edge Function)
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
 import type { DistributionType } from './supplier-cost-center.db.ts';
+
+const supabase = supabaseAdmin();
 
 export type { DistributionType };
 

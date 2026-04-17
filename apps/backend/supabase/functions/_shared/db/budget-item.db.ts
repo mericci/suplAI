@@ -6,11 +6,13 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.ts';
+import { supabaseAdmin } from '../lib/supabase.ts';
 import type { Database } from '../types/supabase.ts';
 
 type BudgetItem = Database['public']['Tables']['budget_items']['Row'];
 type CreateBudgetItemInput = Database['public']['Tables']['budget_items']['Insert'];
+
+const supabase = supabaseAdmin();
 
 /**
  * List all active budget items for an organization.

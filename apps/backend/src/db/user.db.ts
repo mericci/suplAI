@@ -6,12 +6,14 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { Database } from '../types/supabase.js';
 
 type User = Database['public']['Tables']['users']['Row'];
 type CreateUserInput = Database['public']['Tables']['users']['Insert'];
 type UpdateUserInput = Database['public']['Tables']['users']['Update'];
+
+const supabase = supabaseAdmin();
 
 /**
  * Find an active user by ID.
