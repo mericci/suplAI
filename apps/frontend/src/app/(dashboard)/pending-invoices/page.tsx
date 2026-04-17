@@ -89,6 +89,7 @@ const COLUMN_TO_DB: Record<string, string> = {
   tipo: 'document_type',
   monto: 'gross_amount',
   emision: 'issue_date',
+  vencimiento: 'due_date',
   merito: 'executive_title_date',
   ia: 'ai_validation_status',
 };
@@ -906,6 +907,13 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                       Emisión<SortIcon column="emision" />
                     </TableHead>
                     <TableHead
+                      aria-sort={getSortAriaValue('vencimiento')}
+                      className="hidden lg:table-cell w-[100px] text-center cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
+                      onClick={() => handleSort('vencimiento')}
+                    >
+                      Vencimiento<SortIcon column="vencimiento" />
+                    </TableHead>
+                    <TableHead
                       aria-sort={getSortAriaValue('ia')}
                       className="hidden xl:table-cell w-[120px] min-w-[120px] cursor-pointer select-none hover:bg-accent hover:text-accent-foreground transition-colors"
                       onClick={() => handleSort('ia')}
@@ -955,6 +963,9 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-center">
                         <span className="text-sm">{formatDate(inv.issueDate)}</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <span className="text-sm">{formatDate(inv.dueDate)}</span>
                       </TableCell>
                       <TableCell className="hidden xl:table-cell w-[120px] min-w-[120px]">
                         <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={aiLoadingId === inv.id} />
@@ -1084,6 +1095,12 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                       {'Emisión: '}
                       <strong>{formatDate(inv.issueDate)}</strong>
                     </span>
+                    {inv.dueDate && (
+                      <span>
+                        {'Vencimiento: '}
+                        <strong>{formatDate(inv.dueDate)}</strong>
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
