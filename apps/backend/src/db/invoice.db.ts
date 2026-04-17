@@ -6,12 +6,14 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { Database } from '../types/supabase.js';
 
 type Invoice = Database['public']['Tables']['invoices']['Row'];
 type CreateInvoiceInput = Database['public']['Tables']['invoices']['Insert'];
 type UpdateInvoiceInput = Database['public']['Tables']['invoices']['Update'];
+
+const supabase = supabaseAdmin();
 
 /**
  * Find an active invoice by ID, scoped to an organization.

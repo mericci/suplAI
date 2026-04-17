@@ -2,11 +2,13 @@
  * Invoice Comment Database Queries
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { Database } from '../types/supabase.js';
 
 type CommentRow = Database['public']['Tables']['invoice_comments']['Row'];
 type CommentInsert = Database['public']['Tables']['invoice_comments']['Insert'];
+
+const supabase = supabaseAdmin();
 
 export type { CommentRow as InvoiceCommentRow };
 

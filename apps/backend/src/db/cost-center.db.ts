@@ -6,7 +6,9 @@
  * All queries filter by deleted_at IS NULL (soft delete pattern).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
+
+const supabase = supabaseAdmin();
 
 // Use generic types until supabase gen types is run with the new migration
 export interface CostCenterRow {

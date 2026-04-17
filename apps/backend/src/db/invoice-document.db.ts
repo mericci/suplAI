@@ -4,11 +4,13 @@
  * Invoice-specific file attachments (separate from supplier_documents).
  */
 
-import { supabase } from '../lib/supabase.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import type { Database } from '../types/supabase.js';
 
 type DocRow = Database['public']['Tables']['invoice_documents']['Row'];
 type DocInsert = Database['public']['Tables']['invoice_documents']['Insert'];
+
+const supabase = supabaseAdmin();
 
 export type { DocRow as InvoiceDocumentRow };
 
