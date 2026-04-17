@@ -10,22 +10,23 @@ import type { Database } from '../types/supabase.js';
 import 'dotenv/config';
 
 // Validate required environment variables
-const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] as const;
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
 const missing = requiredEnvVars.find((envVar) => !process.env[envVar]);
 if (missing) {
   throw new Error(`Missing required environment variable: ${missing}`);
 }
 
 const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 /**
- * Main Supabase client with type safety
+ * Main Supabase client with type safety.
+ * Uses service role key to bypass RLS — auth is enforced at the HTTP layer.
  */
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
-    autoRefreshToken: true,
-    persistSession: true,
+    autoRefreshToken: false,
+    persistSession: false,
   },
 });
 

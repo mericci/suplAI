@@ -9,22 +9,23 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase.ts';
 
 // Validate required environment variables
-const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'] as const;
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const;
 const missing = requiredEnvVars.find((envVar) => !Deno.env.get(envVar));
 if (missing) {
   throw new Error(`Missing required environment variable: ${missing}`);
 }
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 /**
- * Main Supabase client with type safety
+ * Main Supabase client with type safety.
+ * Uses service role key to bypass RLS — auth is enforced at the HTTP layer.
  */
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
-    autoRefreshToken: true,
-    persistSession: true,
+    autoRefreshToken: false,
+    persistSession: false,
   },
 });
 
