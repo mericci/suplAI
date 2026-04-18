@@ -27,6 +27,7 @@ export function DashboardContent({
   const { loading, isRendidor } = useUserProfile();
 
   if (loading) return <></>;
-  if (isRendidor) return <RendidorEmptyState />;
+  // Rendidores now have access to the Rendiciones module
+  if (isRendidor) return <>{children}</>;
   return <>{children}</>;
 }
