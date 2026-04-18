@@ -6,3 +6,7 @@ export { updateUser } from './update-user';
 export { deleteUser } from './delete-user';
 export type { User, CreateUserPayload, UpdateUserPayload } from './types';
 export type { UserProfile } from './get-me';
+
+export {
+  listPaymentInfos, createPaymentInfo, updatePaymentInfo, deletePaymentInfo, updateRut,
+} from './get-payment-info';

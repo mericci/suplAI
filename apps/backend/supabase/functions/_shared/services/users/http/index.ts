@@ -4,3 +4,8 @@ export { getMeHandler } from './get-me.ts';
 export { createUserHandler } from './create-user.ts';
 export { updateUserHandler } from './update-user.ts';
 export { deleteUserHandler } from './delete-user.ts';
+export { listUserPaymentInfoHandler } from './list-user-payment-info.ts';
+export { createUserPaymentInfoHandler } from './create-user-payment-info.ts';
+export { updateUserPaymentInfoHandler } from './update-user-payment-info.ts';
+export { deleteUserPaymentInfoHandler } from './delete-user-payment-info.ts';
+export { updateUserRutHandler } from './update-user-rut.ts';

@@ -832,6 +832,178 @@ export type Database = {
           },
         ]
       }
+      rendicion_documents: {
+        Row: {
+          accounting_id: string | null
+          ai_validation_notes: string | null
+          ai_validation_status: string
+          amount: number | null
+          backing_type: string | null
+          corrected_amount: number | null
+          cost_center_id: string | null
+          created_at: string
+          deleted_at: string | null
+          file_name: string
+          id: string
+          is_duplicate: boolean
+          is_pending_distribution: boolean
+          organization_id: string
+          rendicion_id: string
+          service_type: string | null
+          storage_bucket: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          accounting_id?: string | null
+          ai_validation_notes?: string | null
+          ai_validation_status?: string
+          amount?: number | null
+          backing_type?: string | null
+          corrected_amount?: number | null
+          cost_center_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          file_name: string
+          id?: string
+          is_duplicate?: boolean
+          is_pending_distribution?: boolean
+          organization_id: string
+          rendicion_id: string
+          service_type?: string | null
+          storage_bucket: string
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          accounting_id?: string | null
+          ai_validation_notes?: string | null
+          ai_validation_status?: string
+          amount?: number | null
+          backing_type?: string | null
+          corrected_amount?: number | null
+          cost_center_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          file_name?: string
+          id?: string
+          is_duplicate?: boolean
+          is_pending_distribution?: boolean
+          organization_id?: string
+          rendicion_id?: string
+          service_type?: string | null
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rendicion_documents_accounting_id_fkey"
+            columns: ["accounting_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_ids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendicion_documents_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendicion_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendicion_documents_rendicion_id_fkey"
+            columns: ["rendicion_id"]
+            isOneToOne: false
+            referencedRelation: "rendiciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rendiciones: {
+        Row: {
+          ai_validated: boolean
+          approved_at: string | null
+          approved_by_user_id: string | null
+          created_at: string
+          created_by_user_id: string
+          deleted_at: string | null
+          id: string
+          organization_id: string
+          rejection_notes: string | null
+          status: string
+          total_amount: number | null
+          updated_at: string
+          user_payment_info_id: string | null
+        }
+        Insert: {
+          ai_validated?: boolean
+          approved_at?: string | null
+          approved_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id: string
+          deleted_at?: string | null
+          id?: string
+          organization_id: string
+          rejection_notes?: string | null
+          status?: string
+          total_amount?: number | null
+          updated_at?: string
+          user_payment_info_id?: string | null
+        }
+        Update: {
+          ai_validated?: boolean
+          approved_at?: string | null
+          approved_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          deleted_at?: string | null
+          id?: string
+          organization_id?: string
+          rejection_notes?: string | null
+          status?: string
+          total_amount?: number | null
+          updated_at?: string
+          user_payment_info_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rendiciones_approved_by_user_id_fkey"
+            columns: ["approved_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rendiciones_user_payment_info_id_fkey"
+            columns: ["user_payment_info_id"]
+            isOneToOne: false
+            referencedRelation: "user_payment_info"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -1145,6 +1317,50 @@ export type Database = {
         }
         Relationships: []
       }
+      user_payment_info: {
+        Row: {
+          account_number: string
+          account_type: string
+          bank: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          is_default: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_number: string
+          account_type: string
+          bank: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_default?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_number?: string
+          account_type?: string
+          bank?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_default?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_payment_info_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -1159,6 +1375,7 @@ export type Database = {
           organization_id: string | null
           phone: string | null
           role: string
+          rut: string | null
           status: string
           updated_at: string
         }
@@ -1175,6 +1392,7 @@ export type Database = {
           organization_id?: string | null
           phone?: string | null
           role?: string
+          rut?: string | null
           status?: string
           updated_at?: string
         }
@@ -1191,6 +1409,7 @@ export type Database = {
           organization_id?: string | null
           phone?: string | null
           role?: string
+          rut?: string | null
           status?: string
           updated_at?: string
         }
