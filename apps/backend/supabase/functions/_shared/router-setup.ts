@@ -19,6 +19,7 @@ import { registerCostCenterRoutes } from './services/cost-centers/routes.ts';
 import { registerAccountingIdRoutes } from './services/accounting-ids/routes.ts';
 import { registerSupplierCostCenterRoutes } from './services/supplier-cost-centers/routes.ts';
 import { registerSupplierAccountingIdRoutes } from './services/supplier-accounting-ids/routes.ts';
+import { registerRendicionRoutes } from './services/rendiciones/routes.ts';
 
 export function createRouter(): Router {
   const router = new Router();
@@ -50,6 +51,7 @@ export function createRouter(): Router {
   registerAccountingIdRoutes(router);
   registerSupplierCostCenterRoutes(router);
   registerSupplierAccountingIdRoutes(router);
+  registerRendicionRoutes(router);
 
   return router;
 }

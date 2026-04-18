@@ -9,6 +9,7 @@ export interface UserProfile {
   role: string;
   organization_id: string;
   cost_center_ids: string[];
+  rut: string | null;
 }
 
 export async function getMe(): Promise<ApiResponse<UserProfile>> {

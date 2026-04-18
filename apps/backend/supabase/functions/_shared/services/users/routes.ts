@@ -11,6 +11,11 @@ import {
   createUserHandler,
   updateUserHandler,
   deleteUserHandler,
+  listUserPaymentInfoHandler,
+  createUserPaymentInfoHandler,
+  updateUserPaymentInfoHandler,
+  deleteUserPaymentInfoHandler,
+  updateUserRutHandler,
 } from './http/index.ts';
 import { requireAuth } from '../../auth/middleware.ts';
 
@@ -19,6 +24,26 @@ export function registerUserRoutes(router: Router): void {
   router.get(
     '/api/users/me',
     requireAuth(async (req, ctx) => getMeHandler(req, ctx)),
+  );
+  router.get(
+    '/api/users/me/payment-info',
+    requireAuth(async (req, ctx) => listUserPaymentInfoHandler(req, ctx)),
+  );
+  router.post(
+    '/api/users/me/payment-info',
+    requireAuth(async (req, ctx) => createUserPaymentInfoHandler(req, ctx)),
+  );
+  router.put(
+    '/api/users/me/payment-info/:infoId',
+    requireAuth(async (req, ctx) => updateUserPaymentInfoHandler(req, ctx)),
+  );
+  router.delete(
+    '/api/users/me/payment-info/:infoId',
+    requireAuth(async (req, ctx) => deleteUserPaymentInfoHandler(req, ctx)),
+  );
+  router.patch(
+    '/api/users/me/rut',
+    requireAuth(async (req, ctx) => updateUserRutHandler(req, ctx)),
   );
   router.get(
     '/api/organizations/:orgId/users',
