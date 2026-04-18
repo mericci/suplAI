@@ -14,6 +14,7 @@ import {
   SettingsIcon,
   LogOutIcon,
   BookOpenIcon,
+  ReceiptIcon,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -49,6 +50,7 @@ const invoiceItems = [
 
 const providerItem = { label: 'Proveedores', href: '/providers', icon: UsersIcon };
 const accountingItem = { label: 'Contabilidad', href: '/accounting', icon: BookOpenIcon };
+const rendicionesItem = { label: 'Rendiciones', href: '/rendiciones', icon: ReceiptIcon };
 
 const adminOnlyItems = [
   { label: 'Equipo', href: '/team', icon: Users2Icon },
@@ -59,15 +61,17 @@ const adminOnlyItems = [
 
 function getNavItems(role: string): Array<{ label: string; href: string; icon: React.ComponentType<{ className?: string }> }> {
   if (role === 'admin' || role === 'super_admin') {
-    return [...invoiceItems, providerItem, accountingItem, ...adminOnlyItems];
+    return [...invoiceItems, providerItem, accountingItem, rendicionesItem, ...adminOnlyItems];
   }
   if (role === 'aprobador') {
-    return [...invoiceItems, providerItem];
+    return [...invoiceItems, providerItem, rendicionesItem];
   }
   if (role === 'standard') {
-    return [...invoiceItems, providerItem, accountingItem];
+    return [...invoiceItems, providerItem, accountingItem, rendicionesItem];
   }
-  // rendidor: no items (DashboardContent shows empty state)
+  if (role === 'rendidor') {
+    return [rendicionesItem];
+  }
   return [];
 }
 
@@ -115,8 +119,8 @@ export function AppSidebar(): React.JSX.Element {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = item.href === '/accounting'
-                  ? pathname.startsWith('/accounting')
+                const isActive = (item.href === '/accounting' || item.href === '/rendiciones')
+                  ? pathname.startsWith(item.href)
                   : pathname === item.href;
                 return (
                   <SidebarMenuItem key={item.href}>

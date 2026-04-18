@@ -7,3 +7,4 @@ export type { SupplierDocument, SupplierDocumentAmount, ExtractedDocumentData } 
 export type { SupplierService } from './types/supplier-service';
 export type { NominaStatus, Nomina, NominaWithInvoiceIds } from './types/nomina';
 export type { OrganizationRule, UpsertOrganizationRulePayload, MeritoAction, MeritoCompletedAction, AiApproveAction } from './types/organization-rule';
+export type { Rendicion, RendicionDocument, UserPaymentInfo, RendicionStatus, BackingType, RendicionDocumentValidationStatus, AccountType } from './types/rendicion';

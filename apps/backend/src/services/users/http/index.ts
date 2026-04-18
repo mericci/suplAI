@@ -4,3 +4,8 @@ export { getMeHandler } from './get-me';
 export { createUserHandler } from './create-user';
 export { updateUserHandler } from './update-user';
 export { deleteUserHandler } from './delete-user';
+export { listUserPaymentInfoHandler } from './list-user-payment-info';
+export { createUserPaymentInfoHandler } from './create-user-payment-info';
+export { updateUserPaymentInfoHandler } from './update-user-payment-info';
+export { deleteUserPaymentInfoHandler } from './delete-user-payment-info';
+export { updateUserRutHandler } from './update-user-rut';

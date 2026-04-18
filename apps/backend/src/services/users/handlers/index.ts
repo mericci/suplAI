@@ -4,3 +4,8 @@ export { createUser } from './create-user';
 export { updateUser } from './update-user';
 export { deleteUser } from './delete-user';
 export { listUsers } from './list-users';
+export { listUserPaymentInfo } from './list-user-payment-info';
+export { createUserPaymentInfo } from './create-user-payment-info';
+export { updateUserPaymentInfo } from './update-user-payment-info';
+export { deleteUserPaymentInfo } from './delete-user-payment-info';
+export { updateUserRut } from './update-user-rut';

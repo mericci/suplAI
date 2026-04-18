@@ -4,3 +4,8 @@ export { createUser } from './create-user.ts';
 export { updateUser } from './update-user.ts';
 export { deleteUser } from './delete-user.ts';
 export { listUsers } from './list-users.ts';
+export { listUserPaymentInfo } from './list-user-payment-info.ts';
+export { createUserPaymentInfo } from './create-user-payment-info.ts';
+export { updateUserPaymentInfo } from './update-user-payment-info.ts';
+export { deleteUserPaymentInfo } from './delete-user-payment-info.ts';
+export { updateUserRut } from './update-user-rut.ts';
