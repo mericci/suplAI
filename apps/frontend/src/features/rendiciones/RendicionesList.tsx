@@ -53,6 +53,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
   const [viewAll, setViewAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [navigating, setNavigating] = useState(false);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -97,8 +98,14 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
         <Separator orientation="vertical" className="h-4" />
         <h1 className="text-base font-semibold">Rendiciones</h1>
         <div className="ml-auto">
-          <Button size="sm" onClick={() => router.push('/rendiciones/nueva')}>
-            <PlusIcon className="mr-1.5 h-4 w-4" />
+          <Button
+            size="sm"
+            disabled={navigating}
+            onClick={() => { setNavigating(true); router.push('/rendiciones/nueva'); }}
+          >
+            {navigating
+              ? <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />
+              : <PlusIcon className="mr-1.5 h-4 w-4" />}
             Nueva rendición
           </Button>
         </div>
@@ -147,8 +154,14 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
                 ? 'No hay rendiciones en la organización.'
                 : 'Aún no tienes rendiciones creadas.'}
             </p>
-            <Button size="sm" onClick={() => router.push('/rendiciones/nueva')}>
-              <PlusIcon className="mr-1.5 h-4 w-4" />
+            <Button
+              size="sm"
+              disabled={navigating}
+              onClick={() => { setNavigating(true); router.push('/rendiciones/nueva'); }}
+            >
+              {navigating
+                ? <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />
+                : <PlusIcon className="mr-1.5 h-4 w-4" />}
               Crear primera rendición
             </Button>
           </div>
