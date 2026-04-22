@@ -79,16 +79,6 @@ export function BankingInfoStep({
     setError(null);
 
     try {
-      if (!rutSaved && rut.trim()) {
-        const rutRes = await updateRut(rut.trim());
-        if (!rutRes.success) {
-          setError(rutRes.error ?? 'Error al guardar el RUT.');
-          setSaving(false);
-          return;
-        }
-        setRutSaved(true);
-      }
-
       const res = await createPaymentInfo({
         bank: form.bank,
         accountType: form.accountType,
@@ -285,6 +275,16 @@ export function BankingInfoStep({
         <Button
           onClick={async () => {
             setSubmitting(true);
+            setError(null);
+            if (!rutSaved && rut.trim()) {
+              const rutRes = await updateRut(rut.trim());
+              if (!rutRes.success) {
+                setError(rutRes.error ?? 'Error al guardar el RUT.');
+                setSubmitting(false);
+                return;
+              }
+              setRutSaved(true);
+            }
             await onNext();
             setSubmitting(false);
           }}
