@@ -4,34 +4,10 @@ import * as rendicionDocDb from '../../../db/rendicion-document.db.js';
 import { uploadFile } from '../../../storage/service.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import type { UploadRendicionDocumentResult } from '../types/index.js';
+import { callAnthropicMessages, anthropicModels } from '../../../commons/integrations/anthropic/index.js';
+import { validateRendicionDocumentPrompt } from '../prompts/index.js';
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-6';
 const STORAGE_BUCKET = 'rendicion-evidence';
-
-/* eslint-disable max-len */
-const SYSTEM_PROMPT = `Eres un experto validador de documentos de respaldo para rendiciones de gastos en Chile.
-Tu tarea es analizar documentos como boletas, facturas, tickets, comprobantes y determinar si son respaldos válidos.
-
-Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
-{
-  "isValid": true/false,
-  "backingType": "boleta|factura|comprobante|ticket|otro|null",
-  "serviceType": "descripción breve del servicio o producto, o null",
-  "amount": número o null,
-  "validationNotes": "razón breve de la validación o rechazo",
-  "issuerRut": "RUT del emisor en formato XXXXXXXX-X, o null",
-  "documentDate": "fecha del documento en formato YYYY-MM-DD, o null",
-  "documentNumber": "número del documento, o null"
-}
-
-Criterios de validez:
-- VÁLIDO: boleta, factura, ticket con monto, fecha y emisor identificables
-- INVÁLIDO: fotos, imágenes sin datos financieros, documentos no relacionados con gastos, documentos ilegibles
-- INVÁLIDO: documentos sin monto identificable
-
-No incluyas texto adicional fuera del JSON.`;
-/* eslint-enable max-len */
 
 interface AiValidationResult {
   isValid: boolean;
@@ -48,9 +24,6 @@ async function validateDocumentWithAI(
   fileBytes: Uint8Array,
   mimeType: string,
 ): Promise<AiValidationResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured');
-
   const base64Data = Buffer.from(fileBytes).toString('base64');
 
   let contentBlock: Record<string, unknown>;
@@ -68,36 +41,22 @@ async function validateDocumentWithAI(
     };
   }
 
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 512,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            contentBlock,
-            { type: 'text', text: 'Analiza este documento y devuelve el JSON de validación.' },
-          ],
-        },
-      ],
-    }),
+  const result = await callAnthropicMessages({
+    model: anthropicModels.sonnet46,
+    max_tokens: 512,
+    system: validateRendicionDocumentPrompt,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          contentBlock,
+          { type: 'text', text: 'Analiza este documento y devuelve el JSON de validación.' },
+        ],
+      },
+    ],
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Claude API error: ${response.status} ${err}`);
-  }
-
-  const result = await response.json() as { content: Array<{ type: string; text: string }> };
-  const textBlock = result.content.find((b) => b.type === 'text');
+  const textBlock = result.content.find((b) => b.type === 'text') as { type: string; text: string } | undefined;
   if (!textBlock) throw new Error('No text response from Claude API');
 
   const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
