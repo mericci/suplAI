@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { formatRut } from '@/lib/rut';
 import { listPaymentInfos, createPaymentInfo, updateRut } from '@/integrations/backend/users';
 import { CHILEAN_BANKS, ACCOUNT_TYPES } from '../constants';
 import type { AccountTypeKey } from '../constants';
@@ -131,7 +132,7 @@ export function BankingInfoStep({
         <Label htmlFor="rut-field">RUT</Label>
         {rutSaved ? (
           <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm">
-            <span className="font-mono">{rut}</span>
+            <span className="font-mono">{formatRut(rut)}</span>
             <CheckIcon className="ml-auto h-4 w-4 text-green-600" />
           </div>
         ) : (

@@ -8,9 +8,9 @@ export async function updateUserRutHandler(
   context: RequestContext,
 ): Promise<Response> {
   try {
-    if (!context.userId) return serverError('User ID not available');
+    if (!context.email) return serverError('User email not available');
     const body = await req.json() as unknown;
-    const updated = await updateUserRut(context.userId, body);
+    const updated = await updateUserRut(context.email, body);
     return successResponse(updated);
   } catch (error) {
     const msg = getErrorMessage(error);

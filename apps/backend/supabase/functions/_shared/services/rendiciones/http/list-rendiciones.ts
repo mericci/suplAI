@@ -1,7 +1,8 @@
 import { listRendiciones } from '../handlers/index.ts';
-import { successResponse, validationError, serverError } from '../../../utils/response.ts';
+import { successResponse, validationError, notFoundResponse, serverError } from '../../../utils/response.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
 import { isValidUUID } from '../../../utils/validation.ts';
+import * as userDb from '../../../db/user.db.ts';
 import type { RequestContext } from '../../../types/api.ts';
 
 const PAGE_SIZE = 20;
@@ -17,7 +18,10 @@ export async function listRendicionesHandler(
     const orgId = segments[orgIdx + 1];
 
     if (!orgId || !isValidUUID(orgId)) return validationError('Invalid organization ID');
-    if (!context.userId) return serverError('User ID not available');
+    if (!context.email) return serverError('User email not available');
+
+    const user = await userDb.findByEmail(context.email);
+    if (!user) return notFoundResponse('User');
 
     const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10));
     const limit = Math.min(100, parseInt(url.searchParams.get('limit') ?? String(PAGE_SIZE), 10));
@@ -28,7 +32,7 @@ export async function listRendicionesHandler(
 
     const result = await listRendiciones({
       organizationId: orgId,
-      userId: context.userId,
+      userId: user.id,
       viewAll: canViewAll,
       status,
       limit,
