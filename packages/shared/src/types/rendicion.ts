@@ -28,6 +28,7 @@ export interface RendicionDocument {
   corrected_amount: number | null;
   ai_validation_status: RendicionDocumentValidationStatus;
   ai_validation_notes: string | null;
+  document_hash: string | null;
   is_duplicate: boolean;
   cost_center_id: string | null;
   accounting_id: string | null;
