@@ -15,7 +15,7 @@ import { getErrorMessage } from '../../../utils/error.ts';
 import { isValidUUID } from '../../../utils/validation.ts';
 import { HttpStatus } from '../../../types/api.ts';
 import type { RequestContext } from '../../../types/api.ts';
-import type { UpsertOrganizationRulePayload } from '@supl/shared';
+import type { UpsertOrganizationRulePayload } from '../../../types/shared.ts';
 
 export async function upsertSettingsHandler(
   req: Request,

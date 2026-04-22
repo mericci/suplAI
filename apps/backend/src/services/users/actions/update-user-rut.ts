@@ -6,16 +6,16 @@ import type { Database } from '../../../types/supabase.js';
 
 type User = Database['public']['Tables']['users']['Row'];
 
-export async function updateUserRut(userId: string, data: unknown): Promise<User> {
+export async function updateUserRut(email: string, data: unknown): Promise<User> {
   try {
-    logger.info('Updating user RUT', { userId });
+    logger.info('Updating user RUT', { email });
     const { rut } = validateUpdateRendicionRut(data);
 
-    const user = await userDb.findById(userId);
+    const user = await userDb.findByEmail(email);
     if (!user) throw new Error('User not found');
     if (user.rut) throw new Error('RUT already set and cannot be changed');
 
-    return await userDb.update(userId, { rut });
+    return await userDb.update(user.id, { rut });
   } catch (error) {
     logger.error('Error updating user RUT', { error: getErrorMessage(error) });
     throw error;
