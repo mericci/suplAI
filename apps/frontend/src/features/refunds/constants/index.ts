@@ -12,6 +12,7 @@ export const BACKING_TYPES = {
 export type BackingTypeKey = keyof typeof BACKING_TYPES;
 
 export const RENDICION_STATUS_LABELS = {
+  draft: 'Borrador',
   pending: 'Pendiente',
   approved: 'Aprobada',
   rejected: 'Rechazada',

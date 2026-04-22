@@ -97,7 +97,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
         <Separator orientation="vertical" className="h-4" />
         <h1 className="text-base font-semibold">Rendiciones</h1>
         <div className="ml-auto">
-          <Button size="sm" onClick={() => router.push('/rendiciones/nueva')}>
+          <Button size="sm" onClick={() => router.push('/refunds/new')}>
             <PlusIcon className="mr-1.5 h-4 w-4" />
             Nueva rendición
           </Button>
@@ -147,7 +147,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
                 ? 'No hay rendiciones en la organización.'
                 : 'Aún no tienes rendiciones creadas.'}
             </p>
-            <Button size="sm" onClick={() => router.push('/rendiciones/nueva')}>
+            <Button size="sm" onClick={() => router.push('/refunds/new')}>
               <PlusIcon className="mr-1.5 h-4 w-4" />
               Crear primera rendición
             </Button>
@@ -170,7 +170,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
                 <TableRow
                   key={r.id}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => router.push(`/rendiciones/${r.id}`)}
+                  onClick={() => router.push(`/refunds/${r.id}`)}
                 >
                   <TableCell className="text-sm">{formatDate(r.created_at)}</TableCell>
                   {viewAll && (

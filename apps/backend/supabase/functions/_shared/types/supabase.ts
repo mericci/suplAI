@@ -444,7 +444,7 @@ export interface Database {
           organization_id: string;
           created_by_user_id: string;
           user_payment_info_id: string | null;
-          status: 'pending' | 'approved' | 'rejected';
+          status: 'draft' | 'pending' | 'approved' | 'rejected';
           ai_validated: boolean;
           total_amount: number | null;
           rejection_notes: string | null;

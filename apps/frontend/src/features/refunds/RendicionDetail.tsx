@@ -120,7 +120,7 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
           <p className="text-sm text-destructive">{error ?? 'No encontrada'}</p>
-          <Button variant="outline" size="sm" onClick={() => router.push('/rendiciones')}>
+          <Button variant="outline" size="sm" onClick={() => router.push('/refunds')}>
             Volver a rendiciones
           </Button>
         </div>
@@ -141,7 +141,7 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
           variant="ghost"
           size="sm"
           className="-ml-2 gap-1.5 text-muted-foreground hover:text-foreground"
-          onClick={() => router.push('/rendiciones')}
+          onClick={() => router.push('/refunds')}
         >
           <ArrowLeftIcon className="h-4 w-4" />
           Rendiciones

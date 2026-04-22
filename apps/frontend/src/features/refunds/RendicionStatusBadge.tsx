@@ -9,6 +9,7 @@ interface RendicionStatusBadgeProps {
 }
 
 const STATUS_STYLES: Record<RendicionStatus, string> = {
+  draft: 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/30 dark:text-gray-400',
   pending: [
     'bg-yellow-100 text-yellow-800 border-yellow-200',
     'dark:bg-yellow-900/30 dark:text-yellow-400',
