@@ -2,6 +2,7 @@ import { approveRendicion } from '../handlers/index.js';
 import { successResponse, validationError, notFoundResponse, serverError } from '../../../utils/response.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import { isValidUUID } from '../../../utils/validation.js';
+import * as userDb from '../../../db/user.db.js';
 import type { RequestContext } from '../../../types/api.js';
 
 export async function approveRendicionHandler(
@@ -18,13 +19,16 @@ export async function approveRendicionHandler(
 
     if (!orgId || !isValidUUID(orgId)) return validationError('Invalid organization ID');
     if (!rendicionId || !isValidUUID(rendicionId)) return validationError('Invalid rendicion ID');
-    if (!context.userId) return serverError('User ID not available');
+    if (!context.email) return serverError('User email not available');
+
+    const user = await userDb.findByEmail(context.email);
+    if (!user) return notFoundResponse('User');
 
     const body = await req.json().catch(() => ({})) as { aiValidated?: boolean };
     const rendicion = await approveRendicion(
       rendicionId,
       orgId,
-      context.userId,
+      user.id,
       body.aiValidated ?? true,
     );
     return successResponse(rendicion, 'Rendicion approved');

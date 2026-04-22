@@ -22,8 +22,30 @@ export const RejectRendicionSchema = z.object({
     .optional(),
 });
 
+function normalizeRut(rut: string): string {
+  return rut.replace(/\./g, '').replace(/-/g, '').toUpperCase().trim();
+}
+
+function isValidChileanRut(rut: string): boolean {
+  if (!/^\d{7,8}[0-9K]$/.test(rut)) return false;
+  const body = rut.slice(0, -1);
+  const dv = rut.slice(-1);
+  let sum = 0;
+  let multiplier = 2;
+  for (let i = body.length - 1; i >= 0; i--) {
+    sum += parseInt(body[i], 10) * multiplier;
+    multiplier = multiplier < 7 ? multiplier + 1 : 2;
+  }
+  const computed = 11 - (sum % 11);
+  const expected = computed === 11 ? '0' : computed === 10 ? 'K' : computed.toString();
+  return dv === expected;
+}
+
 export const UpdateRendicionRutSchema = z.object({
-  rut: z.string().min(1).max(20),
+  rut: z
+    .string()
+    .transform(normalizeRut)
+    .refine(isValidChileanRut, { message: 'Invalid Chilean RUT' }),
 });
 
 export type CreateRendicionInput = z.infer<typeof CreateRendicionSchema>;

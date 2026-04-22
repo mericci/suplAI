@@ -1,5 +1,5 @@
 import type { OrgRuleRow } from '../../../db/organization-rule.db.ts';
-import type { OrganizationRule } from '@supl/shared';
+import type { OrganizationRule } from '../../../types/shared.ts';
 
 export function toPublicRule(row: OrgRuleRow): OrganizationRule {
   return {
