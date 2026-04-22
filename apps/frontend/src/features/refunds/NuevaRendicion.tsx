@@ -148,8 +148,8 @@ export function NuevaRendicion({ orgId, userRut }: NuevaRendicionProps): React.J
           documents={documents}
           onAmountChange={handleAmountChange}
           onBack={() => setStep(2)}
-          onApproved={() => router.push('/rendiciones')}
-          onSentForReview={() => router.push('/rendiciones')}
+          onApproved={() => router.push('/refunds')}
+          onSentForReview={() => router.push('/refunds')}
         />
       )}
     </div>

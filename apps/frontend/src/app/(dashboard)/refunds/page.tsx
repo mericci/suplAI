@@ -1,7 +1,7 @@
 'use client';
 
 import { useUserProfile } from '@/context/UserProfileContext';
-import { RendicionesList } from '@/features/rendiciones/RendicionesList';
+import { RendicionesList } from '@/features/refunds/RendicionesList';
 import { Loader2Icon } from 'lucide-react';
 
 export default function RendicionesPage(): React.JSX.Element {

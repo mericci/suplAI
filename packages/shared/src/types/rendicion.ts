@@ -1,4 +1,4 @@
-export type RendicionStatus = 'pending' | 'approved' | 'rejected';
+export type RendicionStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 export type BackingType = 'boleta' | 'factura' | 'comprobante' | 'ticket' | 'otro';
 export type RendicionDocumentValidationStatus = 'pending' | 'valid' | 'invalid';
 export type AccountType = 'cuenta_corriente' | 'cuenta_vista' | 'cuenta_ahorro' | 'cuenta_rut';

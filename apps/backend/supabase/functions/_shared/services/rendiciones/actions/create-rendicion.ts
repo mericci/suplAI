@@ -21,7 +21,7 @@ export async function createRendicion(
       organization_id: organizationId,
       created_by_user_id: userId,
       user_payment_info_id: validated.userPaymentInfoId,
-      status: 'pending',
+      status: 'draft',
       ai_validated: false,
     });
   } catch (error) {

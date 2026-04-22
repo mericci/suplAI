@@ -15,7 +15,7 @@ export async function approveRendicion(
 
     const rendicion = await rendicionDb.findByIdAndOrg(id, organizationId);
     if (!rendicion) throw new Error('Rendicion not found');
-    if (rendicion.status !== 'pending') {
+    if (!['draft', 'pending'].includes(rendicion.status)) {
       throw new Error(`Cannot approve rendicion with status: ${rendicion.status}`);
     }
 
