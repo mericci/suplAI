@@ -1,7 +1,8 @@
 import { createRendicion } from '../handlers/index.js';
-import { successResponse, validationError, serverError } from '../../../utils/response.js';
+import { successResponse, validationError, notFoundResponse, serverError } from '../../../utils/response.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import { isValidUUID } from '../../../utils/validation.js';
+import * as userDb from '../../../db/user.db.js';
 import type { RequestContext } from '../../../types/api.js';
 
 export async function createRendicionHandler(
@@ -15,10 +16,13 @@ export async function createRendicionHandler(
     const orgId = segments[orgIdx + 1];
 
     if (!orgId || !isValidUUID(orgId)) return validationError('Invalid organization ID');
-    if (!context.userId) return serverError('User ID not available');
+    if (!context.email) return serverError('User email not available');
+
+    const user = await userDb.findByEmail(context.email);
+    if (!user) return notFoundResponse('User');
 
     const body = await req.json() as unknown;
-    const rendicion = await createRendicion(orgId, context.userId, body);
+    const rendicion = await createRendicion(orgId, user.id, body);
     return successResponse(rendicion, 'Rendicion created', 201);
   } catch (error) {
     const msg = getErrorMessage(error);

@@ -1,6 +1,6 @@
 import * as ruleDb from '../../../db/organization-rule.db.ts';
 import { toPublicRule } from '../types/index.ts';
-import type { OrganizationRule } from '@supl/shared';
+import type { OrganizationRule } from '../../../types/shared.ts';
 
 export async function getSettings(
   orgId: string,
