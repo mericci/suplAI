@@ -105,6 +105,33 @@ import type { ApiResponse } from '../types/api.js';
 
 All filenames use kebab-case: `get-user.ts`, `create-user.ts`, `validate-user.ts`.
 
+### Constants naming
+
+Exported module-level constants use camelCase, not SCREAMING_SNAKE_CASE:
+```typescript
+// ✅ correct
+const anthropicApiUrl = 'https://api.anthropic.com/v1/messages';
+const anthropicModels = { sonnet46: 'claude-sonnet-4-6' } as const;
+
+// ❌ wrong
+const ANTHROPIC_API_URL = '...';
+```
+
+### External API calls
+
+All external HTTP API calls must go through `src/commons/integrations/`. No service may call an external API directly. Each integration lives in its own subdirectory following the SII pattern:
+
+```
+commons/integrations/[name]/
+├── config.ts       # Base URLs and constants (camelCase)
+├── types/
+│   └── index.ts    # Shared request/response types
+├── [operation].ts  # One file per operation
+└── index.ts        # Barrel export
+```
+
+The same module must be mirrored under `supabase/functions/_shared/commons/integrations/[name]/` with `.ts` imports and `Deno.env.get()` instead of `process.env`.
+
 ---
 
 ## Domain Model & Architectural Decisions
