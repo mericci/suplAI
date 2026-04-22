@@ -384,6 +384,7 @@ export interface Database {
           corrected_amount: number | null;
           ai_validation_status: 'pending' | 'valid' | 'invalid';
           ai_validation_notes: string | null;
+          document_hash: string | null;
           is_duplicate: boolean;
           cost_center_id: string | null;
           accounting_id: string | null;
@@ -405,6 +406,7 @@ export interface Database {
           corrected_amount?: number | null;
           ai_validation_status?: 'pending' | 'valid' | 'invalid';
           ai_validation_notes?: string | null;
+          document_hash?: string | null;
           is_duplicate?: boolean;
           cost_center_id?: string | null;
           accounting_id?: string | null;
@@ -426,6 +428,7 @@ export interface Database {
           corrected_amount?: number | null;
           ai_validation_status?: 'pending' | 'valid' | 'invalid';
           ai_validation_notes?: string | null;
+          document_hash?: string | null;
           is_duplicate?: boolean;
           cost_center_id?: string | null;
           accounting_id?: string | null;

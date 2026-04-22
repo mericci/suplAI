@@ -100,7 +100,7 @@ export async function checkDuplicate(
     .from('rendicion_documents')
     .select('id')
     .eq('organization_id', organizationId)
-    .eq('ai_validation_notes', `hash:${hash}`)
+    .eq('document_hash', hash)
     .is('deleted_at', null)
     .limit(1);
 

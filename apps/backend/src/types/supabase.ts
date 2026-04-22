@@ -843,6 +843,7 @@ export type Database = {
           cost_center_id: string | null
           created_at: string
           deleted_at: string | null
+          document_hash: string | null
           file_name: string
           id: string
           is_duplicate: boolean
@@ -864,6 +865,7 @@ export type Database = {
           cost_center_id?: string | null
           created_at?: string
           deleted_at?: string | null
+          document_hash?: string | null
           file_name: string
           id?: string
           is_duplicate?: boolean
@@ -885,6 +887,7 @@ export type Database = {
           cost_center_id?: string | null
           created_at?: string
           deleted_at?: string | null
+          document_hash?: string | null
           file_name?: string
           id?: string
           is_duplicate?: boolean
