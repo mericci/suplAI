@@ -6,6 +6,7 @@ import {
   uploadRendicionDocumentHandler,
   approveRendicionHandler,
   rejectRendicionHandler,
+  submitRendicionHandler,
 } from './http/index.js';
 import { requireAuth } from '../../auth/middleware.js';
 
@@ -33,5 +34,9 @@ export function registerRendicionRoutes(router: Router): void {
   router.patch(
     '/api/organizations/:orgId/rendiciones/:id/reject',
     requireAuth(async (req) => rejectRendicionHandler(req)),
+  );
+  router.patch(
+    '/api/organizations/:orgId/rendiciones/:id/submit',
+    requireAuth(async (req) => submitRendicionHandler(req)),
   );
 }

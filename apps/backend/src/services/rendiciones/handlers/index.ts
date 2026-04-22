@@ -4,3 +4,4 @@ export { getRendicion } from './get-rendicion.js';
 export { uploadRendicionDocument } from './upload-rendicion-document.js';
 export { approveRendicion } from './approve-rendicion.js';
 export { rejectRendicion } from './reject-rendicion.js';
+export { submitRendicion } from './submit-rendicion.js';

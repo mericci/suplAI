@@ -941,6 +941,7 @@ export type Database = {
           id: string
           organization_id: string
           rejection_notes: string | null
+          submission_notes: string | null
           status: string
           total_amount: number | null
           updated_at: string
@@ -956,6 +957,7 @@ export type Database = {
           id?: string
           organization_id: string
           rejection_notes?: string | null
+          submission_notes?: string | null
           status?: string
           total_amount?: number | null
           updated_at?: string
@@ -971,6 +973,7 @@ export type Database = {
           id?: string
           organization_id?: string
           rejection_notes?: string | null
+          submission_notes?: string | null
           status?: string
           total_amount?: number | null
           updated_at?: string

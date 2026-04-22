@@ -47,6 +47,7 @@ export interface Rendicion {
   ai_validated: boolean;
   total_amount: number | null;
   rejection_notes: string | null;
+  submission_notes: string | null;
   approved_by_user_id: string | null;
   approved_at: string | null;
   created_at: string;
