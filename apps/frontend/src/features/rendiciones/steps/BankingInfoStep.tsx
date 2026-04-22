@@ -23,7 +23,7 @@ interface BankingInfoStepProps {
   userRut: string | null;
   selectedAccountId: string | null;
   onSelect: (accountId: string) => void;
-  onNext: () => void;
+  onNext: () => Promise<void>;
 }
 
 interface NewAccountForm {
@@ -51,6 +51,7 @@ export function BankingInfoStep({
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState<NewAccountForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rut, setRut] = useState(userRut ?? '');
   const [rutSaved, setRutSaved] = useState(!!userRut);
@@ -281,7 +282,15 @@ export function BankingInfoStep({
       )}
 
       <div className="flex justify-end pt-2">
-        <Button onClick={onNext} disabled={!canProceed()}>
+        <Button
+          onClick={async () => {
+            setSubmitting(true);
+            await onNext();
+            setSubmitting(false);
+          }}
+          disabled={!canProceed() || submitting}
+        >
+          {submitting && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
           Siguiente
         </Button>
       </div>
