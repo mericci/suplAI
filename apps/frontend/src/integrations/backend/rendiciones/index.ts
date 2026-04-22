@@ -4,6 +4,7 @@ export { getRendicion } from './get-rendicion';
 export { uploadRendicionDocument } from './upload-rendicion-document';
 export { approveRendicion } from './approve-rendicion';
 export { rejectRendicion } from './reject-rendicion';
+export { submitRendicion } from './submit-rendicion';
 export type {
   Rendicion,
   RendicionDocument,

@@ -185,6 +185,13 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
           </div>
         </div>
 
+        {rendicion.submission_notes && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-400">
+            <p className="font-medium">Justificación del rendidor</p>
+            <p className="mt-1">{rendicion.submission_notes}</p>
+          </div>
+        )}
+
         {rendicion.rejection_notes && (
           <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
             <p className="font-medium">Notas de rechazo</p>

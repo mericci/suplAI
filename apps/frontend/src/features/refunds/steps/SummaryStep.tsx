@@ -8,7 +8,7 @@ import type { RendicionDocument } from '@supl/shared';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { approveRendicion, rejectRendicion } from '@/integrations/backend/rendiciones';
+import { approveRendicion, submitRendicion } from '@/integrations/backend/rendiciones';
 import { DocumentValidationRow } from '../DocumentValidationRow';
 import { DistributionSummaryTable } from '../DistributionSummaryTable';
 
@@ -34,7 +34,7 @@ export function SummaryStep({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRejectForm, setShowRejectForm] = useState(false);
-  const [rejectionNotes, setRejectionNotes] = useState('');
+  const [submissionNotes, setSubmissionNotes] = useState('');
 
   const sortedDocs = [...documents].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0));
 
@@ -76,18 +76,13 @@ export function SummaryStep({
   }
 
   async function handleSendForReview(): Promise<void> {
-    if (!rejectionNotes.trim()) { setError('Describe las correcciones necesarias.'); return; }
+    if (!submissionNotes.trim()) { setError('Describe por qué esta rendición es válida.'); return; }
     setSubmitting(true);
     setError(null);
 
     try {
-      const corrections = documents
-        .filter((d) => d.corrected_amount != null && d.corrected_amount !== d.amount)
-        .map((d) => ({ documentId: d.id, correctedAmount: d.corrected_amount! }));
-
-      const res = await rejectRendicion(orgId, rendicionId, {
-        rejectionNotes: rejectionNotes.trim(),
-        documentCorrections: corrections.length > 0 ? corrections : undefined,
+      const res = await submitRendicion(orgId, rendicionId, {
+        submissionNotes: submissionNotes.trim(),
       });
 
       if (!res.success) {
@@ -159,12 +154,12 @@ export function SummaryStep({
 
       {showRejectForm && (
         <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-          <Label htmlFor="rejection-notes">¿Qué necesita revisión?</Label>
+          <Label htmlFor="submission-notes">¿Por qué esta rendición es válida?</Label>
           <Textarea
-            id="rejection-notes"
-            placeholder="Describe los montos o documentos que necesitan corrección..."
-            value={rejectionNotes}
-            onChange={(e) => setRejectionNotes(e.target.value)}
+            id="submission-notes"
+            placeholder="Explica por qué los documentos son válidos a pesar de las observaciones de la IA..."
+            value={submissionNotes}
+            onChange={(e) => setSubmissionNotes(e.target.value)}
             rows={3}
           />
         </div>
@@ -192,14 +187,14 @@ export function SummaryStep({
             onClick={() => setShowRejectForm(true)}
             disabled={submitting}
           >
-            Enviar para revisión
+            Solicitar revisión manual
           </Button>
         ) : (
           <div className="flex gap-2">
             <Button
               type="button"
               variant="ghost"
-              onClick={() => { setShowRejectForm(false); setRejectionNotes(''); setError(null); }}
+              onClick={() => { setShowRejectForm(false); setSubmissionNotes(''); setError(null); }}
               disabled={submitting}
             >
               Cancelar
@@ -210,7 +205,7 @@ export function SummaryStep({
               className="flex-1"
             >
               {submitting ? <Loader2Icon className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Enviar para revisión
+              Solicitar revisión manual
             </Button>
           </div>
         )}
