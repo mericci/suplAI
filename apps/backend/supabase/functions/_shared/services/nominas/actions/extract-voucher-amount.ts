@@ -6,32 +6,14 @@
 
 import { logger } from '../../../utils/logger.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
-
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-6';
-
-const SYSTEM_PROMPT = `Eres un experto en análisis de comprobantes de transferencia bancaria chilenos.
-Tu tarea es extraer el monto total transferido en CLP (pesos chilenos) del comprobante de pago.
-
-Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
-{
-  "amount": <entero en pesos chilenos>
-}
-
-El campo "amount" debe ser un número entero que represente el monto total en CLP (sin decimales, sin símbolos).
-Si no puedes determinar el monto con certeza, responde con { "amount": null }.
-No incluyas texto adicional fuera del JSON.`;
+import { callAnthropicMessages, anthropicModels } from '../../../commons/integrations/anthropic/index.ts';
+import { extractVoucherAmountPrompt } from '../prompts/index.ts';
 
 export async function extractVoucherAmount(
   fileBytes: Uint8Array,
   mimeType: string,
 ): Promise<number> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not configured');
-  }
-
-  // Convert Uint8Array to base64 in Deno (chunked to avoid stack overflow on large files)
+  // Chunked base64 to avoid stack overflow on large files in Deno
   let binary = '';
   const chunkSize = 8192;
   for (let i = 0; i < fileBytes.length; i += chunkSize) {
@@ -66,43 +48,25 @@ export async function extractVoucherAmount(
 
   logger.info('Calling Claude API for voucher amount extraction', { mimeType });
 
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 256,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            contentBlock,
-            {
-              type: 'text',
-              text: 'Extrae el monto total de la transferencia de este comprobante de pago.',
-            },
-          ],
-        },
-      ],
-    }),
+  const result = await callAnthropicMessages({
+    model: anthropicModels.sonnet46,
+    max_tokens: 256,
+    system: extractVoucherAmountPrompt,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          contentBlock,
+          {
+            type: 'text',
+            text: 'Extrae el monto total de la transferencia de este comprobante de pago.',
+          },
+        ],
+      },
+    ],
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    logger.error('Claude API error', { status: response.status, body: errorText });
-    throw new Error(`Claude API error: ${response.status} ${errorText}`);
-  }
-
-  const result = await response.json() as {
-    content: Array<{ type: string; text: string }>;
-  };
-
-  const textBlock = result.content.find((b) => b.type === 'text');
+  const textBlock = result.content.find((b) => b.type === 'text') as { type: string; text: string } | undefined;
   if (!textBlock) {
     throw new Error('No text response from Claude API');
   }
