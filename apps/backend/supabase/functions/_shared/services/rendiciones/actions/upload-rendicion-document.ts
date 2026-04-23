@@ -10,6 +10,16 @@ import { validateRendicionDocumentPrompt } from '../prompts/index.ts';
 
 const STORAGE_BUCKET = 'rendicion-evidence';
 
+function detectMimeType(bytes: Uint8Array): string {
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return 'image/png';
+  if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return 'application/pdf';
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+    && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return 'application/octet-stream';
+}
+
 interface AiValidationResult {
   isValid: boolean;
   backingType: 'boleta' | 'factura' | 'comprobante' | 'ticket' | 'otro' | null;
@@ -101,11 +111,11 @@ export async function uploadRendicionDocument(
     const userCostCenterIds = await costCenterDb.findCostCenterIdsByUser(rendicion.created_by_user_id);
     const autoCostCenterId = userCostCenterIds.length === 1 ? userCostCenterIds[0] : null;
 
-    const mimeType = file.type || 'application/octet-stream';
+    const fileBytes = new Uint8Array(await file.arrayBuffer());
+    const mimeType = detectMimeType(fileBytes);
     const supportedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!supportedTypes.includes(mimeType)) throw new Error(`Unsupported file type: ${mimeType}`);
 
-    const fileBytes = new Uint8Array(await file.arrayBuffer());
     const storagePath = `${organizationId}/${rendicionId}/${Date.now()}-${file.name}`;
 
     const { path: uploadedPath } = await uploadFile({
@@ -119,7 +129,8 @@ export async function uploadRendicionDocument(
     try {
       aiResult = await validateDocumentWithAI(fileBytes, mimeType);
     } catch (aiError) {
-      logger.error('AI validation failed', { error: getErrorMessage(aiError) });
+      const errMsg = getErrorMessage(aiError);
+      logger.error('AI validation failed', { error: errMsg });
       aiResult = {
         isValid: false, backingType: null, serviceType: null, amount: null,
         validationNotes: 'AI validation unavailable',
