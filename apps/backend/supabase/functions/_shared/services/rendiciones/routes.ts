@@ -6,6 +6,8 @@ import {
   uploadRendicionDocumentHandler,
   approveRendicionHandler,
   rejectRendicionHandler,
+  submitRendicionHandler,
+  getRendicionDocumentPreviewUrlHandler,
 } from './http/index.ts';
 import { requireAuth } from '../../auth/middleware.ts';
 
@@ -33,5 +35,13 @@ export function registerRendicionRoutes(router: Router): void {
   router.patch(
     '/api/organizations/:orgId/rendiciones/:id/reject',
     requireAuth(async (req) => rejectRendicionHandler(req)),
+  );
+  router.patch(
+    '/api/organizations/:orgId/rendiciones/:id/submit',
+    requireAuth(async (req) => submitRendicionHandler(req)),
+  );
+  router.get(
+    '/api/organizations/:orgId/rendiciones/:id/documents/:docId/preview',
+    requireAuth(async (req) => getRendicionDocumentPreviewUrlHandler(req)),
   );
 }

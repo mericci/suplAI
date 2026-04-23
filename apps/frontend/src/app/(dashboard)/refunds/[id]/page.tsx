@@ -2,7 +2,7 @@
 
 import { use } from 'react';
 import { useUserProfile } from '@/context/UserProfileContext';
-import { RendicionDetail } from '@/features/rendiciones/RendicionDetail';
+import { RendicionDetail } from '@/features/refunds/RendicionDetail';
 import { Loader2Icon } from 'lucide-react';
 
 interface RendicionDetailPageProps {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useUserProfile } from '@/context/UserProfileContext';
-import { NuevaRendicion } from '@/features/rendiciones/NuevaRendicion';
+import { NuevaRendicion } from '@/features/refunds/NuevaRendicion';
 import { Loader2Icon } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
