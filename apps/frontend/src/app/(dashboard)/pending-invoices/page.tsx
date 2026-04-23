@@ -854,32 +854,6 @@ export default function PendingInvoicesPage(): React.JSX.Element {
           </div>
         )}
 
-        {canApprove && pendingRendiciones.length > 0 && (
-          <div className="border-b px-4 py-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Rendiciones pendientes de revisión
-            </p>
-            <div className="flex flex-col gap-1">
-              {pendingRendiciones.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => router.push(`/refunds/${r.id}`)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors"
-                >
-                  <span className="font-medium">{r.name || '—'}</span>
-                  {r.creator_name && (
-                    <>
-                      <span className="text-muted-foreground">|</span>
-                      <span className="text-muted-foreground">{r.creator_name}</span>
-                    </>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {!loading && !error && (
           <>
             {syncFailed && (
@@ -1055,7 +1029,51 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                       )}
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && (
+                  {pendingRendiciones.map((r) => (
+                    <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium truncate max-w-[220px]">{r.creator_name || '—'}</span>
+                          <span className="text-xs text-muted-foreground">{r.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
+                          Rendición
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="text-sm font-medium">
+                          {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <span className="text-sm text-muted-foreground">—</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <span className="text-sm text-muted-foreground">—</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <span className="text-sm">{formatDate(r.created_at)}</span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <span className="text-sm text-muted-foreground">—</span>
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell w-[120px] min-w-[120px]">
+                        <AiValidationBadge
+                          status={r.ai_validated ? 'ok' : ((r.document_count ?? 0) > 0 ? 'error' : null)}
+                          notes={null}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="whitespace-nowrap bg-orange-100 text-orange-800 border-orange-200">
+                          Pendiente
+                        </Badge>
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  ))}
+                  {filtered.length === 0 && pendingRendiciones.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                         No se encontraron facturas
