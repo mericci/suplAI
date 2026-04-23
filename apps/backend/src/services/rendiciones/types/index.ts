@@ -6,6 +6,7 @@ export type RendicionDocumentRow = Database['public']['Tables']['rendicion_docum
 export interface RendicionPublic extends RendicionRow {
   documents?: RendicionDocumentRow[];
   document_count?: number;
+  creator_name?: string;
 }
 
 export interface UploadRendicionDocumentResult {

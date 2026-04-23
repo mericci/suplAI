@@ -43,6 +43,7 @@ export interface Rendicion {
   organization_id: string;
   created_by_user_id: string;
   user_payment_info_id: string | null;
+  name: string;
   status: RendicionStatus;
   ai_validated: boolean;
   total_amount: number | null;
@@ -53,6 +54,7 @@ export interface Rendicion {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  creator_name?: string;
   documents?: RendicionDocument[];
   document_count?: number;
 }

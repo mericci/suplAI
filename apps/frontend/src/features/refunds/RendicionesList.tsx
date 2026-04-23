@@ -157,6 +157,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Nombre</TableHead>
                 <TableHead>Fecha</TableHead>
                 {viewAll && <TableHead>Creada por</TableHead>}
                 <TableHead>Estado</TableHead>
@@ -172,10 +173,11 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => router.push(`/refunds/${r.id}`)}
                 >
-                  <TableCell className="text-sm">{formatDate(r.created_at)}</TableCell>
+                  <TableCell className="text-sm font-medium">{r.name || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDate(r.created_at)}</TableCell>
                   {viewAll && (
-                    <TableCell className="text-sm font-mono text-muted-foreground text-xs">
-                      {r.created_by_user_id.slice(0, 8)}…
+                    <TableCell className="text-sm text-muted-foreground">
+                      {r.creator_name || r.created_by_user_id.slice(0, 8) + '…'}
                     </TableCell>
                   )}
                   <TableCell>

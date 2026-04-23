@@ -940,6 +940,7 @@ export type Database = {
           deleted_at: string | null
           id: string
           organization_id: string
+          name: string
           rejection_notes: string | null
           submission_notes: string | null
           status: string
@@ -956,6 +957,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           organization_id: string
+          name?: string
           rejection_notes?: string | null
           submission_notes?: string | null
           status?: string
@@ -971,6 +973,7 @@ export type Database = {
           created_by_user_id?: string
           deleted_at?: string | null
           id?: string
+          name?: string
           organization_id?: string
           rejection_notes?: string | null
           submission_notes?: string | null
