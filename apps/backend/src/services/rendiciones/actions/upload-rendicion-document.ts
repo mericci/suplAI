@@ -1,6 +1,7 @@
 import { logger } from '../../../utils/logger.js';
 import * as rendicionDb from '../../../db/rendicion.db.js';
 import * as rendicionDocDb from '../../../db/rendicion-document.db.js';
+import * as costCenterDb from '../../../db/cost-center.db.js';
 import { uploadFile } from '../../../storage/service.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import type { UploadRendicionDocumentResult } from '../types/index.js';
@@ -89,6 +90,9 @@ export async function uploadRendicionDocument(
     const rendicion = await rendicionDb.findByIdAndOrg(rendicionId, organizationId);
     if (!rendicion) throw new Error('Rendicion not found');
 
+    const userCostCenterIds = await costCenterDb.findCostCenterIdsByUser(rendicion.created_by_user_id);
+    const autoCostCenterId = userCostCenterIds.length === 1 ? userCostCenterIds[0] : null;
+
     const mimeType = file.type || 'application/octet-stream';
     const supportedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!supportedTypes.includes(mimeType)) {
@@ -146,7 +150,8 @@ export async function uploadRendicionDocument(
       document_hash: hash,
       ai_validation_notes: aiResult.validationNotes,
       is_duplicate: isDuplicate,
-      is_pending_distribution: true,
+      cost_center_id: autoCostCenterId ?? undefined,
+      is_pending_distribution: autoCostCenterId === null,
     });
 
     const totalAmount = await rendicionDocDb.computeTotalAmount(rendicionId);
