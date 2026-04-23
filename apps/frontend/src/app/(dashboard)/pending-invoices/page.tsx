@@ -641,6 +641,19 @@ export default function PendingInvoicesPage(): React.JSX.Element {
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
 
+  type UnifiedRow =
+    | { kind: 'invoice'; data: EnrichedInvoice }
+    | { kind: 'rendicion'; data: Rendicion };
+
+  const unifiedRows: UnifiedRow[] = [
+    ...filtered.map((data) => ({ kind: 'invoice' as const, data })),
+    ...pendingRendiciones.map((data) => ({ kind: 'rendicion' as const, data })),
+  ].sort((a, b) => {
+    const dateA = a.kind === 'invoice' ? a.data.issueDate : a.data.created_at;
+    const dateB = b.kind === 'invoice' ? b.data.issueDate : b.data.created_at;
+    return new Date(dateB).getTime() - new Date(dateA).getTime();
+  });
+
   const totalPending = filtered.reduce((sum, inv) => sum + (inv.grossAmount ?? 0), 0);
 
   function SortIcon({ column }: { column: string }): React.JSX.Element {
@@ -940,140 +953,146 @@ export default function PendingInvoicesPage(): React.JSX.Element {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((inv) => (
-                    <TableRow key={inv.id} className="cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {inv.issuerTaxIdentifier}
-                            {' · N° '}
-                            {inv.documentNumber}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge variant="outline" className="max-w-[160px] block truncate whitespace-nowrap overflow-hidden cursor-default">
-                                {inv.documentType}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>{inv.documentType}</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <BudgetStatusCell
-                          invoiceId={inv.id}
-                          budgetStatuses={budgetStatuses}
-                        />
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <MeritCell issueDate={inv.issueDate} status={inv.status} />
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm">{formatDate(inv.issueDate)}</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm">{formatDate(inv.dueDate)}</span>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell w-[120px] min-w-[120px]">
-                        <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={aiLoadingId === inv.id} />
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('whitespace-nowrap', statusClasses(inv.status))}>
-                          {statusLabel(inv.status)}
-                        </Badge>
-                      </TableCell>
-                      {canApproveInvoice(inv) && (
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                aria-label={`Acciones para factura ${inv.documentNumber}`}
-                                disabled={actionLoading === inv.id}
-                              >
-                                <MoreHorizontalIcon className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {inv.status === 'pending' && (
-                                <>
-                                  <DropdownMenuItem onClick={() => handleApprove(inv)}>
-                                    Aprobar
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleReject(inv)}>
-                                    Rechazar
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {isAdmin && (
-                                <DropdownMenuItem
-                                  onClick={() => handleValidateAi(inv)}
-                                  disabled={actionLoading === inv.id || aiLoadingId === inv.id}
-                                >
-                                  Re-validar con IA
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                  {unifiedRows.map((row) => {
+                    if (row.kind === 'rendicion') {
+                      const r = row.data;
+                      return (
+                        <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium truncate max-w-[220px]">{r.creator_name || '—'}</span>
+                              <span className="text-xs text-muted-foreground">{r.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
+                              Rendición
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="text-sm font-medium">
+                              {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            <span className="text-sm text-muted-foreground">—</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm text-muted-foreground">—</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm">{formatDate(r.created_at)}</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm text-muted-foreground">—</span>
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell w-[120px] min-w-[120px]">
+                            <AiValidationBadge
+                              status={r.ai_validated ? 'ok' : ((r.document_count ?? 0) > 0 ? 'error' : null)}
+                              notes={null}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="whitespace-nowrap bg-orange-100 text-orange-800 border-orange-200">
+                              Pendiente
+                            </Badge>
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
+                      );
+                    }
+                    const inv = row.data;
+                    return (
+                      <TableRow key={inv.id} className="cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {inv.issuerTaxIdentifier}
+                              {' · N° '}
+                              {inv.documentNumber}
+                            </span>
+                          </div>
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                  {pendingRendiciones.map((r) => (
-                    <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium truncate max-w-[220px]">{r.creator_name || '—'}</span>
-                          <span className="text-xs text-muted-foreground">{r.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
-                          Rendición
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="text-sm font-medium">
-                          {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <span className="text-sm text-muted-foreground">—</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm text-muted-foreground">—</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm">{formatDate(r.created_at)}</span>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">
-                        <span className="text-sm text-muted-foreground">—</span>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell w-[120px] min-w-[120px]">
-                        <AiValidationBadge
-                          status={r.ai_validated ? 'ok' : ((r.document_count ?? 0) > 0 ? 'error' : null)}
-                          notes={null}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="whitespace-nowrap bg-orange-100 text-orange-800 border-orange-200">
-                          Pendiente
-                        </Badge>
-                      </TableCell>
-                      <TableCell />
-                    </TableRow>
-                  ))}
-                  {filtered.length === 0 && pendingRendiciones.length === 0 && (
+                        <TableCell>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="max-w-[160px] block truncate whitespace-nowrap overflow-hidden cursor-default">
+                                  {inv.documentType}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>{inv.documentType}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <BudgetStatusCell
+                            invoiceId={inv.id}
+                            budgetStatuses={budgetStatuses}
+                          />
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-center">
+                          <MeritCell issueDate={inv.issueDate} status={inv.status} />
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-center">
+                          <span className="text-sm">{formatDate(inv.issueDate)}</span>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-center">
+                          <span className="text-sm">{formatDate(inv.dueDate)}</span>
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell w-[120px] min-w-[120px]">
+                          <AiValidationBadge status={inv.aiValidationStatus} notes={inv.aiValidationNotes} loading={aiLoadingId === inv.id} />
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('whitespace-nowrap', statusClasses(inv.status))}>
+                            {statusLabel(inv.status)}
+                          </Badge>
+                        </TableCell>
+                        {canApproveInvoice(inv) && (
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  aria-label={`Acciones para factura ${inv.documentNumber}`}
+                                  disabled={actionLoading === inv.id}
+                                >
+                                  <MoreHorizontalIcon className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {inv.status === 'pending' && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleApprove(inv)}>
+                                      Aprobar
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleReject(inv)}>
+                                      Rechazar
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {isAdmin && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleValidateAi(inv)}
+                                    disabled={actionLoading === inv.id || aiLoadingId === inv.id}
+                                  >
+                                    Re-validar con IA
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {unifiedRows.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                         No se encontraron facturas
