@@ -843,6 +843,7 @@ export type Database = {
           cost_center_id: string | null
           created_at: string
           deleted_at: string | null
+          document_hash: string | null
           file_name: string
           id: string
           is_duplicate: boolean
@@ -864,6 +865,7 @@ export type Database = {
           cost_center_id?: string | null
           created_at?: string
           deleted_at?: string | null
+          document_hash?: string | null
           file_name: string
           id?: string
           is_duplicate?: boolean
@@ -885,6 +887,7 @@ export type Database = {
           cost_center_id?: string | null
           created_at?: string
           deleted_at?: string | null
+          document_hash?: string | null
           file_name?: string
           id?: string
           is_duplicate?: boolean
@@ -937,7 +940,9 @@ export type Database = {
           deleted_at: string | null
           id: string
           organization_id: string
+          name: string
           rejection_notes: string | null
+          submission_notes: string | null
           status: string
           total_amount: number | null
           updated_at: string
@@ -952,7 +957,9 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           organization_id: string
+          name?: string
           rejection_notes?: string | null
+          submission_notes?: string | null
           status?: string
           total_amount?: number | null
           updated_at?: string
@@ -966,8 +973,10 @@ export type Database = {
           created_by_user_id?: string
           deleted_at?: string | null
           id?: string
+          name?: string
           organization_id?: string
           rejection_notes?: string | null
+          submission_notes?: string | null
           status?: string
           total_amount?: number | null
           updated_at?: string

@@ -1,6 +1,7 @@
 import { logger } from '../../../utils/logger.js';
 import * as rendicionDb from '../../../db/rendicion.db.js';
 import * as rendicionDocDb from '../../../db/rendicion-document.db.js';
+import * as userDb from '../../../db/user.db.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import type { RendicionPublic } from '../types/index.js';
 
@@ -32,10 +33,21 @@ export async function listRendiciones(
 
     const { rendiciones, total } = await rendicionDb.findAll(filters);
 
+    const userCache = new Map<string, string>();
     const enriched = await Promise.all(
       rendiciones.map(async (r) => {
         const docs = await rendicionDocDb.findAllByRendicion(r.id);
-        return { ...r, documents: docs, document_count: docs.length };
+        if (!userCache.has(r.created_by_user_id)) {
+          const user = await userDb.findById(r.created_by_user_id);
+          const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : '';
+          userCache.set(r.created_by_user_id, name);
+        }
+        return {
+          ...r,
+          documents: docs,
+          document_count: docs.length,
+          creator_name: userCache.get(r.created_by_user_id) ?? '',
+        };
       }),
     );
 

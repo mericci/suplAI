@@ -56,12 +56,14 @@ export async function findAll(
     .from('rendiciones')
     .select('*', { count: 'exact', head: true })
     .eq('organization_id', filters.organizationId)
+    .neq('status', 'draft')
     .is('deleted_at', null);
 
   let dataQuery = db
     .from('rendiciones')
     .select('*')
     .eq('organization_id', filters.organizationId)
+    .neq('status', 'draft')
     .is('deleted_at', null);
 
   if (filters.userId) {

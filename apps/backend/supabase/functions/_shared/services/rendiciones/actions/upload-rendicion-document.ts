@@ -131,7 +131,8 @@ export async function uploadRendicionDocument(
       service_type: aiResult.serviceType,
       amount: aiResult.amount,
       ai_validation_status: aiResult.isValid ? 'valid' : 'invalid',
-      ai_validation_notes: `hash:${hash} | ${aiResult.validationNotes}`,
+      document_hash: hash,
+      ai_validation_notes: aiResult.validationNotes,
       is_duplicate: isDuplicate,
       is_pending_distribution: true,
     });

@@ -97,7 +97,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
         <Separator orientation="vertical" className="h-4" />
         <h1 className="text-base font-semibold">Rendiciones</h1>
         <div className="ml-auto">
-          <Button size="sm" onClick={() => router.push('/rendiciones/nueva')}>
+          <Button size="sm" onClick={() => router.push('/refunds/new')}>
             <PlusIcon className="mr-1.5 h-4 w-4" />
             Nueva rendición
           </Button>
@@ -147,7 +147,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
                 ? 'No hay rendiciones en la organización.'
                 : 'Aún no tienes rendiciones creadas.'}
             </p>
-            <Button size="sm" onClick={() => router.push('/rendiciones/nueva')}>
+            <Button size="sm" onClick={() => router.push('/refunds/new')}>
               <PlusIcon className="mr-1.5 h-4 w-4" />
               Crear primera rendición
             </Button>
@@ -157,6 +157,7 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Nombre</TableHead>
                 <TableHead>Fecha</TableHead>
                 {viewAll && <TableHead>Creada por</TableHead>}
                 <TableHead>Estado</TableHead>
@@ -170,12 +171,13 @@ export function RendicionesList({ orgId }: RendicionesListProps): React.JSX.Elem
                 <TableRow
                   key={r.id}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => router.push(`/rendiciones/${r.id}`)}
+                  onClick={() => router.push(`/refunds/${r.id}`)}
                 >
-                  <TableCell className="text-sm">{formatDate(r.created_at)}</TableCell>
+                  <TableCell className="text-sm font-medium">{r.name || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDate(r.created_at)}</TableCell>
                   {viewAll && (
-                    <TableCell className="text-sm font-mono text-muted-foreground text-xs">
-                      {r.created_by_user_id.slice(0, 8)}…
+                    <TableCell className="text-sm text-muted-foreground">
+                      {r.creator_name || r.created_by_user_id.slice(0, 8) + '…'}
                     </TableCell>
                   )}
                   <TableCell>

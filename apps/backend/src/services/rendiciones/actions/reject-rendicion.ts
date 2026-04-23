@@ -15,7 +15,7 @@ export async function rejectRendicion(
 
     const rendicion = await rendicionDb.findByIdAndOrg(id, organizationId);
     if (!rendicion) throw new Error('Rendicion not found');
-    if (rendicion.status !== 'pending') {
+    if (!['draft', 'pending'].includes(rendicion.status)) {
       throw new Error(`Cannot reject rendicion with status: ${rendicion.status}`);
     }
 

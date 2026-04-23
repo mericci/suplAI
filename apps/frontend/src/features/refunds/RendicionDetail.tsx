@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
-import { getRendicion, approveRendicion, rejectRendicion } from '@/integrations/backend/rendiciones';
+import { getRendicion, approveRendicion, rejectRendicion, getRendicionDocumentPreviewUrl } from '@/integrations/backend/rendiciones';
 import { useUserProfile } from '@/context/UserProfileContext';
 import { RendicionStatusBadge } from './RendicionStatusBadge';
 import { DocumentValidationRow } from './DocumentValidationRow';
@@ -120,7 +120,7 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
           <p className="text-sm text-destructive">{error ?? 'No encontrada'}</p>
-          <Button variant="outline" size="sm" onClick={() => router.push('/rendiciones')}>
+          <Button variant="outline" size="sm" onClick={() => router.push('/refunds')}>
             Volver a rendiciones
           </Button>
         </div>
@@ -141,7 +141,7 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
           variant="ghost"
           size="sm"
           className="-ml-2 gap-1.5 text-muted-foreground hover:text-foreground"
-          onClick={() => router.push('/rendiciones')}
+          onClick={() => router.push('/refunds')}
         >
           <ArrowLeftIcon className="h-4 w-4" />
           Rendiciones
@@ -185,6 +185,13 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
           </div>
         </div>
 
+        {rendicion.submission_notes && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-400">
+            <p className="font-medium">Justificación del rendidor</p>
+            <p className="mt-1">{rendicion.submission_notes}</p>
+          </div>
+        )}
+
         {rendicion.rejection_notes && (
           <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400">
             <p className="font-medium">Notas de rechazo</p>
@@ -198,7 +205,16 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
               Documentos ({documents.length})
             </p>
             {documents.map((doc) => (
-              <DocumentValidationRow key={doc.id} doc={doc} readOnly />
+              <DocumentValidationRow
+                key={doc.id}
+                doc={doc}
+                readOnly
+                getPreviewUrl={async () => {
+                  const res = await getRendicionDocumentPreviewUrl(orgId, rendicionId, doc.id);
+                  if (!res.success || !res.data) throw new Error(res.error ?? 'Error');
+                  return res.data.signedUrl;
+                }}
+              />
             ))}
           </div>
         )}
