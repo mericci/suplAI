@@ -345,6 +345,19 @@ export default function PaidInvoicesPage(): React.JSX.Element {
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
 
+  type UnifiedRow =
+    | { kind: 'invoice'; data: EnrichedInvoice }
+    | { kind: 'rendicion'; data: Rendicion };
+
+  const unifiedRows: UnifiedRow[] = [
+    ...filtered.map((data) => ({ kind: 'invoice' as const, data })),
+    ...approvedRendiciones.map((data) => ({ kind: 'rendicion' as const, data })),
+  ].sort((a, b) => {
+    const dateA = a.kind === 'invoice' ? a.data.issueDate : a.data.created_at;
+    const dateB = b.kind === 'invoice' ? b.data.issueDate : b.data.created_at;
+    return new Date(dateB ?? '').getTime() - new Date(dateA ?? '').getTime();
+  });
+
   function SortIcon({ column }: { column: string }): React.JSX.Element {
     if (sortConfig.column !== column) {
       return <ChevronsUpDownIcon className="inline h-3.5 w-3.5 ml-1 text-muted-foreground/40" aria-hidden="true" />;
@@ -535,71 +548,77 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((inv) => (
-                        <TableRow key={inv.id} className="cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {inv.issuerTaxIdentifier}
-                                {' · N° '}
-                                {inv.documentNumber}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="whitespace-nowrap">{inv.documentType}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.issueDate)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.dueDate)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.approvedAt)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.paidAt)}</span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {approvedRendiciones.map((r) => (
-                        <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium truncate max-w-[220px]">{r.creator_name || '—'}</span>
-                              <span className="text-xs text-muted-foreground">{r.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
-                              Rendición
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="text-sm font-medium">
-                              {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
-                            </span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(r.created_at)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm text-muted-foreground">—</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{r.approved_at ? formatDate(r.approved_at) : '—'}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm text-muted-foreground">—</span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filtered.length === 0 && approvedRendiciones.length === 0 && (
+                      {unifiedRows.map((row) => {
+                        if (row.kind === 'rendicion') {
+                          const r = row.data;
+                          return (
+                            <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <span className="font-medium truncate max-w-[220px]">{r.creator_name || '—'}</span>
+                                  <span className="text-xs text-muted-foreground">{r.name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
+                                  Rendición
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className="text-sm font-medium">
+                                  {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm">{formatDate(r.created_at)}</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm text-muted-foreground">—</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm">{r.approved_at ? formatDate(r.approved_at) : '—'}</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm text-muted-foreground">—</span>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                        const inv = row.data;
+                        return (
+                          <TableRow key={inv.id} className="cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {inv.issuerTaxIdentifier}
+                                  {' · N° '}
+                                  {inv.documentNumber}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="whitespace-nowrap">{inv.documentType}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.issueDate)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.dueDate)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.approvedAt)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.paidAt)}</span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {unifiedRows.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                             No hay facturas pagadas
