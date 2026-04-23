@@ -21,11 +21,20 @@ interface AiValidationResult {
   documentNumber: string | null;
 }
 
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 async function validateDocumentWithAI(
   fileBytes: Uint8Array,
   mimeType: string,
 ): Promise<AiValidationResult> {
-  const base64Data = btoa(String.fromCharCode(...fileBytes));
+  const base64Data = uint8ArrayToBase64(fileBytes);
 
   let contentBlock: Record<string, unknown>;
   if (mimeType === 'application/pdf') {
