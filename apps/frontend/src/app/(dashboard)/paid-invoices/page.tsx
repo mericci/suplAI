@@ -48,6 +48,8 @@ import {
 } from '@/components/ui/tabs';
 import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
+import { listRendiciones } from '@/integrations/backend/rendiciones';
+import type { Rendicion } from '@supl/shared';
 import { getMe } from '@/integrations/backend/users';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
@@ -154,6 +156,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   const [nominas, setNominas] = useState<NominaWithInvoiceIds[]>([]);
   const [nominasLoading, setNominasLoading] = useState(false);
   const [voucherLoading, setVoucherLoading] = useState<string | null>(null);
+  const [approvedRendiciones, setApprovedRendiciones] = useState<Rendicion[]>([]);
   const [invoiceDialog, setInvoiceDialog] = useState<InvoiceDialogState>({
     open: false,
     nomina: null,
@@ -203,9 +206,15 @@ export default function PaidInvoicesPage(): React.JSX.Element {
 
       setNominasLoading(true);
       try {
-        const res = await listNominas(orgId);
-        if (res.success && res.data) {
-          setNominas(res.data.filter((n) => n.status === NOMINA_STATUS.PAID));
+        const [nominasRes, rendicionesRes] = await Promise.all([
+          listNominas(orgId),
+          listRendiciones(orgId, { page: 1, status: 'approved', viewAll: true }),
+        ]);
+        if (nominasRes.success && nominasRes.data) {
+          setNominas(nominasRes.data.filter((n) => n.status === NOMINA_STATUS.PAID));
+        }
+        if (rendicionesRes.success && rendicionesRes.data) {
+          setApprovedRendiciones(rendicionesRes.data.rendiciones);
         }
       } finally {
         setNominasLoading(false);
@@ -558,7 +567,39 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                           </TableCell>
                         </TableRow>
                       ))}
-                      {filtered.length === 0 && (
+                      {approvedRendiciones.map((r) => (
+                        <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium truncate max-w-[220px]">{r.creator_name || '—'}</span>
+                              <span className="text-xs text-muted-foreground">{r.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
+                              Rendición
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="text-sm font-medium">
+                              {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm">{formatDate(r.created_at)}</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm text-muted-foreground">—</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm">{r.approved_at ? formatDate(r.approved_at) : '—'}</span>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center">
+                            <span className="text-sm text-muted-foreground">—</span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {filtered.length === 0 && approvedRendiciones.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                             No hay facturas pagadas
