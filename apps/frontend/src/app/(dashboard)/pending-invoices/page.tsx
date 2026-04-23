@@ -52,6 +52,8 @@ import {
 } from '@/components/ui/tooltip';
 import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
+import { listRendiciones } from '@/integrations/backend/rendiciones';
+import type { Rendicion } from '@supl/shared';
 import { getMe } from '@/integrations/backend/users';
 import { useUserProfile } from '@/context/UserProfileContext';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
@@ -339,6 +341,7 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   const [refreshKey, setRefreshKey] = useState(0);
   const [budgetStatuses, setBudgetStatuses] = useState<Record<string, InvoiceBudgetStatus>>({});
   const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
+  const [pendingRendiciones, setPendingRendiciones] = useState<Rendicion[]>([]);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSortChangeRef = useRef(false);
 
@@ -533,6 +536,18 @@ export default function PendingInvoicesPage(): React.JSX.Element {
   // Only run on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!canApprove) return;
+    const loadPendingRendiciones = async (): Promise<void> => {
+      const orgId = await getOrgId();
+      if (!orgId) return;
+      const res = await listRendiciones(orgId, { page: 1, status: 'pending', viewAll: true });
+      if (res.success && res.data) setPendingRendiciones(res.data.rendiciones);
+    };
+    loadPendingRendiciones();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canApprove]);
 
   const handleApplyFilters = (): void => {
     setCurrentPage(1);
@@ -836,6 +851,32 @@ export default function PendingInvoicesPage(): React.JSX.Element {
         {error && (
           <div className="flex items-center justify-center py-20">
             <p className="text-destructive">{error}</p>
+          </div>
+        )}
+
+        {canApprove && pendingRendiciones.length > 0 && (
+          <div className="border-b px-4 py-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Rendiciones pendientes de revisión
+            </p>
+            <div className="flex flex-col gap-1">
+              {pendingRendiciones.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => router.push(`/refunds/${r.id}`)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors"
+                >
+                  <span className="font-medium">{r.name || '—'}</span>
+                  {r.creator_name && (
+                    <>
+                      <span className="text-muted-foreground">|</span>
+                      <span className="text-muted-foreground">{r.creator_name}</span>
+                    </>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

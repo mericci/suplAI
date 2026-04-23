@@ -4,6 +4,7 @@ export const RendicionStatusEnum = z.enum(['pending', 'approved', 'rejected']);
 
 export const CreateRendicionSchema = z.object({
   userPaymentInfoId: z.string().uuid(),
+  name: z.string().min(1, 'El nombre es obligatorio.').max(200),
 });
 
 export const ApproveRendicionSchema = z.object({

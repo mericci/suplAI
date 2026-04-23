@@ -23,7 +23,7 @@ interface BankingInfoStepProps {
   userRut: string | null;
   selectedAccountId: string | null;
   onSelect: (accountId: string) => void;
-  onNext: () => void;
+  onNext: (name: string) => void;
 }
 
 interface NewAccountForm {
@@ -54,6 +54,7 @@ export function BankingInfoStep({
   const [error, setError] = useState<string | null>(null);
   const [rut, setRut] = useState(userRut ?? '');
   const [rutSaved, setRutSaved] = useState(!!userRut);
+  const [name, setName] = useState('');
 
   useEffect(() => {
     listPaymentInfos()
@@ -115,7 +116,7 @@ export function BankingInfoStep({
   }
 
   function canProceed(): boolean {
-    return !!selectedAccountId && (rutSaved || rut.trim().length > 0);
+    return name.trim().length > 0 && !!selectedAccountId && (rutSaved || rut.trim().length > 0);
   }
 
   if (loading) {
@@ -128,6 +129,16 @@ export function BankingInfoStep({
 
   return (
     <div className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="name-field">Nombre de la rendición</Label>
+        <Input
+          id="name-field"
+          placeholder="Ej: Viaje a Santiago enero 2026"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="rut-field">RUT</Label>
         {rutSaved ? (
@@ -281,7 +292,7 @@ export function BankingInfoStep({
       )}
 
       <div className="flex justify-end pt-2">
-        <Button onClick={onNext} disabled={!canProceed()}>
+        <Button onClick={() => onNext(name.trim())} disabled={!canProceed()}>
           Siguiente
         </Button>
       </div>

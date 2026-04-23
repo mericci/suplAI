@@ -50,21 +50,10 @@ export function SummaryStep({
     setSubmitting(true);
     setError(null);
     try {
-      const corrections = documents
-        .filter((d) => d.corrected_amount != null && d.corrected_amount !== d.amount)
-        .map((d) => ({ documentId: d.id, correctedAmount: d.corrected_amount! }));
-
       const res = await approveRendicion(orgId, rendicionId, true);
       if (!res.success) {
         setError(res.error ?? 'Error al aprobar la rendición.');
         return;
-      }
-
-      if (corrections.length > 0) {
-        await rejectRendicion(orgId, rendicionId, {
-          rejectionNotes: 'Montos corregidos por el rendidor',
-          documentCorrections: corrections,
-        });
       }
 
       onApproved();

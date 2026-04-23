@@ -31,12 +31,12 @@ export function NuevaRendicion({ orgId, userRut }: NuevaRendicionProps): React.J
   const [documents, setDocuments] = useState<RendicionDocument[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  async function handleStep1Next(): Promise<void> {
+  async function handleStep1Next(name: string): Promise<void> {
     if (!selectedAccountId) return;
     setCreateError(null);
 
     if (!rendicionId) {
-      const res = await createRendicion(orgId, { userPaymentInfoId: selectedAccountId });
+      const res = await createRendicion(orgId, { userPaymentInfoId: selectedAccountId, name });
       if (!res.success || !res.data) {
         setCreateError(res.error ?? 'Error al crear la rendición.');
         return;
