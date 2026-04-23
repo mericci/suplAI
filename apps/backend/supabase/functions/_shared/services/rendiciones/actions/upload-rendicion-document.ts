@@ -1,6 +1,7 @@
 import { logger } from '../../../utils/logger.ts';
 import * as rendicionDb from '../../../db/rendicion.db.ts';
 import * as rendicionDocDb from '../../../db/rendicion-document.db.ts';
+import * as costCenterDb from '../../../db/cost-center.db.ts';
 import { uploadFile } from '../../../storage/service.ts';
 import { getErrorMessage } from '../../../utils/error.ts';
 import type { UploadRendicionDocumentResult } from '../types/index.ts';
@@ -88,6 +89,9 @@ export async function uploadRendicionDocument(
     const rendicion = await rendicionDb.findByIdAndOrg(rendicionId, organizationId);
     if (!rendicion) throw new Error('Rendicion not found');
 
+    const userCostCenterIds = await costCenterDb.findCostCenterIdsByUser(rendicion.created_by_user_id);
+    const autoCostCenterId = userCostCenterIds.length === 1 ? userCostCenterIds[0] : null;
+
     const mimeType = file.type || 'application/octet-stream';
     const supportedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!supportedTypes.includes(mimeType)) throw new Error(`Unsupported file type: ${mimeType}`);
@@ -134,7 +138,8 @@ export async function uploadRendicionDocument(
       document_hash: hash,
       ai_validation_notes: aiResult.validationNotes,
       is_duplicate: isDuplicate,
-      is_pending_distribution: true,
+      cost_center_id: autoCostCenterId ?? undefined,
+      is_pending_distribution: autoCostCenterId === null,
     });
 
     const totalAmount = await rendicionDocDb.computeTotalAmount(rendicionId);
