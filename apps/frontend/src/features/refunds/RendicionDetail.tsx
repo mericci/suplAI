@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
-import { getRendicion, approveRendicion, rejectRendicion } from '@/integrations/backend/rendiciones';
+import { getRendicion, approveRendicion, rejectRendicion, getRendicionDocumentPreviewUrl } from '@/integrations/backend/rendiciones';
 import { useUserProfile } from '@/context/UserProfileContext';
 import { RendicionStatusBadge } from './RendicionStatusBadge';
 import { DocumentValidationRow } from './DocumentValidationRow';
@@ -205,7 +205,16 @@ export function RendicionDetail({ orgId, rendicionId }: RendicionDetailProps): R
               Documentos ({documents.length})
             </p>
             {documents.map((doc) => (
-              <DocumentValidationRow key={doc.id} doc={doc} readOnly />
+              <DocumentValidationRow
+                key={doc.id}
+                doc={doc}
+                readOnly
+                getPreviewUrl={async () => {
+                  const res = await getRendicionDocumentPreviewUrl(orgId, rendicionId, doc.id);
+                  if (!res.success || !res.data) throw new Error(res.error ?? 'Error');
+                  return res.data.signedUrl;
+                }}
+              />
             ))}
           </div>
         )}

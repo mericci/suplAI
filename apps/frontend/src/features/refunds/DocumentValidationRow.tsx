@@ -1,11 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import {
-  FileIcon, CheckCircle2Icon, XCircleIcon, Loader2Icon, AlertTriangleIcon,
+  FileIcon, CheckCircle2Icon, XCircleIcon, Loader2Icon, AlertTriangleIcon, EyeIcon,
 } from 'lucide-react';
 import type { RendicionDocument } from '@supl/shared';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { BACKING_TYPES, VALIDATION_STATUS_LABELS } from './constants';
 
@@ -13,14 +21,40 @@ interface DocumentValidationRowProps {
   doc: RendicionDocument;
   onAmountChange?: (docId: string, amount: number) => void;
   readOnly?: boolean;
+  getPreviewUrl?: () => Promise<string>;
+}
+
+function isImageFile(fileName: string): boolean {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
 }
 
 export function DocumentValidationRow({
   doc,
   onAmountChange,
   readOnly = false,
+  getPreviewUrl,
 }: DocumentValidationRowProps): React.JSX.Element {
   const isPending = doc.ai_validation_status === 'pending';
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  async function handlePreviewOpen(): Promise<void> {
+    setPreviewOpen(true);
+    if (previewUrl) return;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const url = await getPreviewUrl!();
+      setPreviewUrl(url);
+    } catch {
+      setPreviewError('No se pudo cargar el documento.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
   const isValid = doc.ai_validation_status === 'valid';
   const isInvalid = doc.ai_validation_status === 'invalid';
 
@@ -45,6 +79,18 @@ export function DocumentValidationRow({
           {isValid && !doc.is_duplicate && <CheckCircle2Icon className="h-3.5 w-3.5 shrink-0 text-green-600" />}
           {isInvalid && <XCircleIcon className="h-3.5 w-3.5 shrink-0 text-red-600" />}
           {doc.is_duplicate && <AlertTriangleIcon className="h-3.5 w-3.5 shrink-0 text-orange-600" />}
+          {getPreviewUrl && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0"
+              aria-label="Ver documento"
+              onClick={handlePreviewOpen}
+            >
+              <EyeIcon className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -104,6 +150,46 @@ export function DocumentValidationRow({
           {doc.is_duplicate ? 'Duplicado' : VALIDATION_STATUS_LABELS[doc.ai_validation_status]}
         </Badge>
       </div>
+
+      {getPreviewUrl && (
+        <Sheet open={previewOpen} onOpenChange={(v) => { if (v) handlePreviewOpen(); else setPreviewOpen(false); }}>
+          <SheetContent side="right" className="flex flex-col overflow-hidden p-0 sm:max-w-2xl">
+            <SheetHeader className="border-b px-4 py-4">
+              <SheetTitle className="truncate text-sm font-medium">{doc.file_name}</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {previewLoading && (
+                <div className="flex flex-1 items-center justify-center">
+                  <Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {previewError && (
+                <div className="flex flex-1 items-center justify-center p-6">
+                  <p className="text-sm text-destructive">{previewError}</p>
+                </div>
+              )}
+              {previewUrl && !previewLoading && (
+                isImageFile(doc.file_name) ? (
+                  <div className="flex flex-1 items-center justify-center overflow-auto bg-muted/20 p-4">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewUrl}
+                      alt={doc.file_name}
+                      className="max-h-full max-w-full rounded object-contain"
+                    />
+                  </div>
+                ) : (
+                  <iframe
+                    src={previewUrl}
+                    title={doc.file_name}
+                    className="flex-1 border-0"
+                  />
+                )
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }
