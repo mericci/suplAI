@@ -48,6 +48,8 @@ import {
 } from '@/components/ui/tabs';
 import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
+import { listRendiciones } from '@/integrations/backend/rendiciones';
+import type { Rendicion } from '@supl/shared';
 import { getMe } from '@/integrations/backend/users';
 import { getSupplier, listSuppliersByOrg } from '@/integrations/backend/suppliers';
 import type { Supplier } from '@/integrations/backend/suppliers';
@@ -154,6 +156,7 @@ export default function PaidInvoicesPage(): React.JSX.Element {
   const [nominas, setNominas] = useState<NominaWithInvoiceIds[]>([]);
   const [nominasLoading, setNominasLoading] = useState(false);
   const [voucherLoading, setVoucherLoading] = useState<string | null>(null);
+  const [approvedRendiciones, setApprovedRendiciones] = useState<Rendicion[]>([]);
   const [invoiceDialog, setInvoiceDialog] = useState<InvoiceDialogState>({
     open: false,
     nomina: null,
@@ -203,9 +206,15 @@ export default function PaidInvoicesPage(): React.JSX.Element {
 
       setNominasLoading(true);
       try {
-        const res = await listNominas(orgId);
-        if (res.success && res.data) {
-          setNominas(res.data.filter((n) => n.status === NOMINA_STATUS.PAID));
+        const [nominasRes, rendicionesRes] = await Promise.all([
+          listNominas(orgId),
+          listRendiciones(orgId, { page: 1, status: 'approved', viewAll: true }),
+        ]);
+        if (nominasRes.success && nominasRes.data) {
+          setNominas(nominasRes.data.filter((n) => n.status === NOMINA_STATUS.PAID));
+        }
+        if (rendicionesRes.success && rendicionesRes.data) {
+          setApprovedRendiciones(rendicionesRes.data.rendiciones);
         }
       } finally {
         setNominasLoading(false);
@@ -335,6 +344,19 @@ export default function PaidInvoicesPage(): React.JSX.Element {
       || inv.documentNumber.toLowerCase().includes(debouncedSearch.toLowerCase())
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
+
+  type UnifiedRow =
+    | { kind: 'invoice'; data: EnrichedInvoice }
+    | { kind: 'rendicion'; data: Rendicion };
+
+  const unifiedRows: UnifiedRow[] = [
+    ...filtered.map((data) => ({ kind: 'invoice' as const, data })),
+    ...approvedRendiciones.map((data) => ({ kind: 'rendicion' as const, data })),
+  ].sort((a, b) => {
+    const dateA = a.kind === 'invoice' ? a.data.issueDate : a.data.created_at;
+    const dateB = b.kind === 'invoice' ? b.data.issueDate : b.data.created_at;
+    return new Date(dateB ?? '').getTime() - new Date(dateA ?? '').getTime();
+  });
 
   function SortIcon({ column }: { column: string }): React.JSX.Element {
     if (sortConfig.column !== column) {
@@ -526,39 +548,77 @@ export default function PaidInvoicesPage(): React.JSX.Element {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((inv) => (
-                        <TableRow key={inv.id} className="cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {inv.issuerTaxIdentifier}
-                                {' · N° '}
-                                {inv.documentNumber}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="whitespace-nowrap">{inv.documentType}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.issueDate)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.dueDate)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.approvedAt)}</span>
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell text-center">
-                            <span className="text-sm">{formatDate(inv.paidAt)}</span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filtered.length === 0 && (
+                      {unifiedRows.map((row) => {
+                        if (row.kind === 'rendicion') {
+                          const r = row.data;
+                          return (
+                            <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <span className="font-medium truncate max-w-[220px]">{r.creator_name || '—'}</span>
+                                  <span className="text-xs text-muted-foreground">{r.name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
+                                  Rendición
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className="text-sm font-medium">
+                                  {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm">{formatDate(r.created_at)}</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm text-muted-foreground">—</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm">{r.approved_at ? formatDate(r.approved_at) : '—'}</span>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell text-center">
+                                <span className="text-sm text-muted-foreground">—</span>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                        const inv = row.data;
+                        return (
+                          <TableRow key={inv.id} className="cursor-pointer" onClick={() => router.push(`/invoices/${inv.id}`)}>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium truncate max-w-[220px]">{inv.supplierName}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {inv.issuerTaxIdentifier}
+                                  {' · N° '}
+                                  {inv.documentNumber}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="whitespace-nowrap">{inv.documentType}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="text-sm font-medium">{formatCLP(inv.grossAmount)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.issueDate)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.dueDate)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.approvedAt)}</span>
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell text-center">
+                              <span className="text-sm">{formatDate(inv.paidAt)}</span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {unifiedRows.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                             No hay facturas pagadas

@@ -70,6 +70,8 @@ import {
 } from '@/components/ui/tabs';
 import { getOrgInvoices } from '@/integrations/backend/sii';
 import type { Invoice } from '@/integrations/backend/sii';
+import { listRendiciones } from '@/integrations/backend/rendiciones';
+import type { Rendicion } from '@supl/shared';
 import { getMe, getUser } from '@/integrations/backend/users';
 import type { User } from '@/integrations/backend/users';
 import {
@@ -242,6 +244,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
   const [nominasLoading, setNominasLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [totalApprovedAll, setTotalApprovedAll] = useState<number | null>(null);
+  const [approvedRendiciones, setApprovedRendiciones] = useState<Rendicion[]>([]);
 
   // Map invoiceId → nomina for tooltip lookup
   const invoiceToNominaMap = useMemo<Map<string, NominaWithInvoiceIds>>(() => {
@@ -341,6 +344,11 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
 
       const suppliersRes = await listSuppliersByOrg(orgId, { limit: 100 });
       if (suppliersRes.success) setSuppliers(suppliersRes.data);
+
+      const rendicionesRes = await listRendiciones(orgId, { page: 1, status: 'approved', viewAll: true });
+      if (rendicionesRes.success && rendicionesRes.data) {
+        setApprovedRendiciones(rendicionesRes.data.rendiciones);
+      }
 
       await Promise.all([
         refreshLockedIds(orgId),
@@ -483,6 +491,19 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
       || inv.documentNumber.toLowerCase().includes(debouncedSearch.toLowerCase())
       || inv.issuerTaxIdentifier.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
+
+  type UnifiedRow =
+    | { kind: 'invoice'; data: EnrichedInvoice }
+    | { kind: 'rendicion'; data: Rendicion };
+
+  const unifiedRows: UnifiedRow[] = [
+    ...filtered.map((data) => ({ kind: 'invoice' as const, data })),
+    ...approvedRendiciones.map((data) => ({ kind: 'rendicion' as const, data })),
+  ].sort((a, b) => {
+    const dateA = a.kind === 'invoice' ? a.data.issueDate : a.data.created_at;
+    const dateB = b.kind === 'invoice' ? b.data.issueDate : b.data.created_at;
+    return new Date(dateB ?? '').getTime() - new Date(dateA ?? '').getTime();
+  });
 
   // Unlocked invoices on current page
   const unlockedOnPage = filtered.filter((inv) => !lockedInvoiceIds.has(inv.id));
@@ -958,7 +979,54 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filtered.map((inv) => {
+                        {unifiedRows.map((row) => {
+                          if (row.kind === 'rendicion') {
+                            const r = row.data;
+                            return (
+                              <TableRow key={`r-${r.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/refunds/${r.id}`)}>
+                                {isAdmin && <TableCell />}
+                                <TableCell>
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-medium truncate max-w-[180px]">{r.creator_name || '—'}</span>
+                                    <span className="text-xs text-muted-foreground">{r.name}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="whitespace-nowrap bg-violet-50 text-violet-700 border-violet-200">
+                                    Rendición
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <span className="text-sm font-medium">
+                                    {r.total_amount != null ? formatCLP(r.total_amount) : '—'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell text-center">
+                                  <span className="text-sm">{formatDate(r.created_at)}</span>
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell text-center">
+                                  <span className="text-sm">{r.approved_at ? formatDate(r.approved_at) : '—'}</span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {r.ai_validated ? (
+                                    <CheckCircle2Icon className="h-4 w-4 text-emerald-600 mx-auto" />
+                                  ) : (
+                                    <XCircleIcon className="h-4 w-4 text-red-500 mx-auto" />
+                                  )}
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell text-center">
+                                  <span className="text-sm text-muted-foreground">—</span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          }
+                          const inv = row.data;
                           const isLocked = lockedInvoiceIds.has(inv.id);
                           const onCheckChange = (v: boolean | 'indeterminate'): void => {
                             handleRowCheckboxChange(inv.id, !!v);
@@ -1078,7 +1146,7 @@ export default function ApprovedInvoicesPage(): React.JSX.Element {
                             </TableRow>
                           );
                         })}
-                        {filtered.length === 0 && (
+                        {unifiedRows.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={isAdmin ? 10 : 9} className="text-center py-10 text-muted-foreground">
                               No hay facturas aprobadas
