@@ -501,6 +501,8 @@ export interface Database {
           currency: string;
           periodicity: 'monthly' | 'quarterly' | 'annual';
           supplier_id: string | null;
+          accounting_id: string | null;
+          cost_center_id: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -514,6 +516,8 @@ export interface Database {
           currency?: string;
           periodicity?: 'monthly' | 'quarterly' | 'annual';
           supplier_id?: string | null;
+          accounting_id?: string | null;
+          cost_center_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -527,6 +531,8 @@ export interface Database {
           currency?: string;
           periodicity?: 'monthly' | 'quarterly' | 'annual';
           supplier_id?: string | null;
+          accounting_id?: string | null;
+          cost_center_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;

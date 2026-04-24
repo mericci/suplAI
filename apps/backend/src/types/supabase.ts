@@ -79,7 +79,9 @@ export type Database = {
       }
       budget_items: {
         Row: {
+          accounting_id: string | null
           amount: number
+          cost_center_id: string | null
           created_at: string
           currency: string
           deleted_at: string | null
@@ -92,7 +94,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accounting_id?: string | null
           amount: number
+          cost_center_id?: string | null
           created_at?: string
           currency?: string
           deleted_at?: string | null
@@ -105,7 +109,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accounting_id?: string | null
           amount?: number
+          cost_center_id?: string | null
           created_at?: string
           currency?: string
           deleted_at?: string | null
@@ -118,6 +124,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "budget_items_accounting_id_fkey"
+            columns: ["accounting_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_ids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_items_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "budget_items_organization_id_fkey"
             columns: ["organization_id"]
