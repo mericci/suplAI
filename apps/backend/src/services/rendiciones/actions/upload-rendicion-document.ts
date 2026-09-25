@@ -2,11 +2,14 @@ import { logger } from '../../../utils/logger.js';
 import * as rendicionDb from '../../../db/rendicion.db.js';
 import * as rendicionDocDb from '../../../db/rendicion-document.db.js';
 import * as costCenterDb from '../../../db/cost-center.db.js';
+import * as accountingIdDb from '../../../db/accounting-id.db.js';
+import * as budgetItemDb from '../../../db/budget-item.db.js';
 import { uploadFile } from '../../../storage/service.js';
 import { getErrorMessage } from '../../../utils/error.js';
 import type { UploadRendicionDocumentResult } from '../types/index.js';
 import { callAnthropicMessages, anthropicModels } from '../../../commons/integrations/anthropic/index.js';
 import { validateRendicionDocumentPrompt } from '../prompts/index.js';
+import type { AccountingIdRow } from '../../../db/accounting-id.db.js';
 
 const STORAGE_BUCKET = 'rendicion-evidence';
 
@@ -29,11 +32,13 @@ interface AiValidationResult {
   issuerRut: string | null;
   documentDate: string | null;
   documentNumber: string | null;
+  accountingId: string | null;
 }
 
 async function validateDocumentWithAI(
   fileBytes: Uint8Array,
   mimeType: string,
+  accountingIds: AccountingIdRow[],
 ): Promise<AiValidationResult> {
   const base64Data = Buffer.from(fileBytes).toString('base64');
 
@@ -55,7 +60,7 @@ async function validateDocumentWithAI(
   const result = await callAnthropicMessages({
     model: anthropicModels.sonnet46,
     max_tokens: 512,
-    system: validateRendicionDocumentPrompt,
+    system: validateRendicionDocumentPrompt(accountingIds),
     messages: [
       {
         role: 'user',
@@ -89,6 +94,26 @@ async function computeDocumentHash(
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+function getBudgetPeriodWindow(periodicity: string): { start: string; end: string } {
+  const now = new Date();
+  let start: Date;
+  let end: Date;
+
+  if (periodicity === 'quarterly') {
+    const quarter = Math.floor(now.getMonth() / 3);
+    start = new Date(now.getFullYear(), quarter * 3, 1);
+    end = new Date(now.getFullYear(), quarter * 3 + 3, 0, 23, 59, 59, 999);
+  } else if (periodicity === 'annual') {
+    start = new Date(now.getFullYear(), 0, 1);
+    end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  }
+
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
 export async function uploadRendicionDocument(
   rendicionId: string,
   organizationId: string,
@@ -100,7 +125,10 @@ export async function uploadRendicionDocument(
     const rendicion = await rendicionDb.findByIdAndOrg(rendicionId, organizationId);
     if (!rendicion) throw new Error('Rendicion not found');
 
-    const userCostCenterIds = await costCenterDb.findCostCenterIdsByUser(rendicion.created_by_user_id);
+    const [userCostCenterIds, accountingIds] = await Promise.all([
+      costCenterDb.findCostCenterIdsByUser(rendicion.created_by_user_id),
+      accountingIdDb.findAllByOrganization(organizationId),
+    ]);
     const autoCostCenterId = userCostCenterIds.length === 1 ? userCostCenterIds[0] : null;
 
     const fileBytes = new Uint8Array(await file.arrayBuffer());
@@ -120,7 +148,7 @@ export async function uploadRendicionDocument(
 
     let aiResult: AiValidationResult;
     try {
-      aiResult = await validateDocumentWithAI(fileBytes, mimeType);
+      aiResult = await validateDocumentWithAI(fileBytes, mimeType, accountingIds);
     } catch (aiError) {
       const errMsg = getErrorMessage(aiError);
       logger.error('AI validation failed', { error: errMsg });
@@ -133,7 +161,41 @@ export async function uploadRendicionDocument(
         issuerRut: null,
         documentDate: null,
         documentNumber: null,
+        accountingId: null,
       };
+    }
+
+    // Resolve accounting ID: AI match → fallback "otros gastos" → null
+    let resolvedAccountingId: string | null = null;
+    if (aiResult.accountingId) {
+      const match = accountingIds.find((a) => a.id === aiResult.accountingId);
+      if (match) resolvedAccountingId = match.id;
+    }
+    if (!resolvedAccountingId) {
+      const otrosGastos = accountingIds.find((a) =>
+        a.description.toLowerCase().includes('otros') || a.external_id.toLowerCase().includes('otros'),
+      );
+      if (otrosGastos) resolvedAccountingId = otrosGastos.id;
+    }
+
+    const isPendingDistribution = resolvedAccountingId === null || autoCostCenterId === null;
+
+    // Budget validation
+    let validationStatus = aiResult.isValid ? 'valid' : 'invalid';
+    let validationNotes = aiResult.validationNotes;
+
+    if (aiResult.isValid && resolvedAccountingId && aiResult.amount !== null) {
+      const budget = await budgetItemDb.findBudgetForAccountingId(organizationId, resolvedAccountingId);
+      if (budget) {
+        const { start, end } = getBudgetPeriodWindow(budget.periodicity);
+        const currentSpend = await budgetItemDb.computeSpendForAccountingId(
+          organizationId, resolvedAccountingId, start, end,
+        );
+        if (currentSpend + aiResult.amount > budget.amount) {
+          validationStatus = 'invalid';
+          validationNotes = `Presupuesto excedido: gasto acumulado $${currentSpend.toLocaleString('es-CL')} + $${aiResult.amount.toLocaleString('es-CL')} supera el límite de $${budget.amount.toLocaleString('es-CL')}`;
+        }
+      }
     }
 
     const hash = await computeDocumentHash(
@@ -156,12 +218,13 @@ export async function uploadRendicionDocument(
       backing_type: aiResult.backingType,
       service_type: aiResult.serviceType,
       amount: aiResult.amount,
-      ai_validation_status: aiResult.isValid ? 'valid' : 'invalid',
+      ai_validation_status: validationStatus,
       document_hash: hash,
-      ai_validation_notes: aiResult.validationNotes,
+      ai_validation_notes: validationNotes,
       is_duplicate: isDuplicate,
       cost_center_id: autoCostCenterId ?? undefined,
-      is_pending_distribution: autoCostCenterId === null,
+      accounting_id: resolvedAccountingId ?? undefined,
+      is_pending_distribution: isPendingDistribution,
     });
 
     const totalAmount = await rendicionDocDb.computeTotalAmount(rendicionId);

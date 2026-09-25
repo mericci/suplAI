@@ -68,6 +68,54 @@ export async function create(data: CreateBudgetItemInput): Promise<BudgetItem> {
 }
 
 /**
+ * Find the first active budget item for a given accounting ID within an org.
+ */
+export async function findBudgetForAccountingId(
+  organizationId: string,
+  accountingId: string,
+): Promise<BudgetItem | null> {
+  const { data, error } = await supabase
+    .from('budget_items')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('accounting_id', accountingId)
+    .is('deleted_at', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  return data as BudgetItem | null;
+}
+
+/**
+ * Sum valid, non-duplicate rendicion document amounts for an accounting ID within a period.
+ */
+export async function computeSpendForAccountingId(
+  organizationId: string,
+  accountingId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('rendicion_documents' as never)
+    .select('amount, corrected_amount')
+    .eq('organization_id', organizationId)
+    .eq('accounting_id', accountingId)
+    .eq('ai_validation_status', 'valid')
+    .eq('is_duplicate', false)
+    .is('deleted_at', null)
+    .gte('created_at', periodStart)
+    .lte('created_at', periodEnd);
+
+  if (error) throw new Error(`Database error: ${error.message}`);
+  type SpendRow = { amount: number | null; corrected_amount: number | null };
+  return ((data ?? []) as SpendRow[]).reduce(
+    (sum, row) => sum + Number(row.corrected_amount ?? row.amount ?? 0),
+    0,
+  );
+}
+
+/**
  * Soft-delete a budget item by ID, scoped to an organization.
  */
 export async function softDeleteById(
