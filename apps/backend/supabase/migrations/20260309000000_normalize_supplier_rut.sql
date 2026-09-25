@@ -1,6 +1,6 @@
 -- Normalize supplier tax_identifier: strip dots, merge duplicates
 --
--- Problem: SII returns RUTs in different formats ("76124890-1" vs "76.124.890-1"),
+-- Problem: SII returns RUTs in different formats ("11111111-1" vs "11.111.111-1"),
 -- causing duplicate supplier rows that bypass the unique partial index.
 -- Solution: normalize to no-dots format, merge duplicates by migrating invoice
 -- references to the oldest supplier record, then soft-delete the extras.

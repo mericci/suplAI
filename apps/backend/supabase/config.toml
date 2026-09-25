@@ -1,7 +1,7 @@
 # Supabase Configuration
 # Generated with `supabase init`
 
-project_id = "ekkcwhpmtoxddntajlcb"
+project_id = "suplai"
 
 [api]
 enabled = true

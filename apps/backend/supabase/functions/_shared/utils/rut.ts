@@ -1,7 +1,7 @@
 /**
  * Normalize a Chilean RUT by stripping dots (but keeping the dash).
- * Stored format: "76124890-1" (no dots)
- * Display format: "76.124.890-1" (with dots) — handled by the frontend
+ * Stored format: "11111111-1" (no dots)
+ * Display format: "11.111.111-1" (with dots) — handled by the frontend
  */
 export function normalizeRut(rut: string): string {
   return rut.replace(/\./g, '').trim();
@@ -9,7 +9,7 @@ export function normalizeRut(rut: string): string {
 
 /**
  * Format a Chilean RUT for display, adding thousand-separator dots.
- * "76124890-1" → "76.124.890-1"
+ * "11111111-1" → "11.111.111-1"
  */
 export function formatRut(rut: string): string {
   const normalized = normalizeRut(rut);

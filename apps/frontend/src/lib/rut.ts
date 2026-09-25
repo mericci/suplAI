@@ -1,13 +1,13 @@
 /**
  * Strip dots from a Chilean RUT (normalize to DB storage format).
- * "76.124.890-1" → "76124890-1"
+ * "11.111.111-1" → "11111111-1"
  */
 export function normalizeRut(rut: string): string {
   return rut.replace(/\./g, '').trim();
 }
 
 /**
- * Format a Chilean RUT for display: "19245106K" → "19.245.106-K"
+ * Format a Chilean RUT for display: "11111111K" → "11.111.111-K"
  * Accepts stored format (no dash), dashed format, and already-formatted input.
  */
 export function formatRut(rut: string): string {
